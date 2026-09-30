@@ -1,5 +1,6 @@
 import { addScan, createTextFileContent } from './scanner-state.js';
 import { decodeCanvasBothOrientations } from './frame-decoder.js';
+import { playSound, unlockSound } from './audio-feedback.js';
 
 const EMAIL = 'thinnes13@freenet.de';
 const STORAGE_KEY = 'itf-scanner-scans-v1';
@@ -8,7 +9,8 @@ const $ = (selector) => document.querySelector(selector);
 const elements = {
   preview: $('#preview'), placeholder: $('#camera-placeholder'), start: $('#start-scan'), stop: $('#stop-scan'),
   status: $('#status'), count: $('#count'), list: $('#scan-list'), undo: $('#undo'), finish: $('#finish'), reset: $('#reset'),
-  panel: $('#finish-panel'), finishCount: $('#finish-count'), email: $('#email'), share: $('#share-file'), continue: $('#continue')
+  panel: $('#finish-panel'), finishCount: $('#finish-count'), email: $('#email'), share: $('#share-file'), continue: $('#continue'),
+  successSound: $('#success-sound'), duplicateSound: $('#duplicate-sound')
 };
 
 let scans = loadScans();
@@ -47,13 +49,25 @@ function setStatus(message, kind = 'neutral') {
   elements.status.className = `status ${kind}`;
 }
 
-function prepareAudio() {
-  if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioContext.state === 'suspended') audioContext.resume();
+async function prepareAudio() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (AudioContextClass && !audioContext) audioContext = new AudioContextClass();
+  const unlocks = [elements.successSound, elements.duplicateSound]
+    .filter(Boolean)
+    .map((sound) => unlockSound(sound));
+  await Promise.all(unlocks);
+  if (audioContext?.state === 'suspended') {
+    try { await audioContext.resume(); } catch { /* Audiodatei bleibt die Hauptlösung. */ }
+  }
 }
 
-function beep(kind = 'success') {
+async function beep(kind = 'success') {
+  const sound = kind === 'success' ? elements.successSound : elements.duplicateSound;
+  if (sound && await playSound(sound)) return;
   if (!audioContext) return;
+  if (audioContext.state === 'suspended') {
+    try { await audioContext.resume(); } catch { return; }
+  }
   const oscillator = audioContext.createOscillator();
   const gain = audioContext.createGain();
   const start = audioContext.currentTime;
@@ -75,11 +89,11 @@ function handleDetectedCode(rawCode) {
   const result = addScan(scans, code);
   scans = result.scans;
   if (result.status === 'duplicate') {
-    beep('duplicate');
+    void beep('duplicate');
     setStatus(`Bereits erfasst: ${code}`, 'warning');
     return;
   }
-  beep('success');
+  void beep('success');
   saveAndRender();
   setStatus(`Scan ${scans.length} gespeichert: ${code}`, 'success');
 }
@@ -110,7 +124,7 @@ function scanNextFrame() {
 }
 
 async function startScanner() {
-  prepareAudio();
+  await prepareAudio();
   if (scannerActive) return;
   if (!window.isSecureContext && location.hostname !== 'localhost') {
     setStatus('Die Kamera benötigt eine sichere HTTPS-Verbindung.', 'error');
