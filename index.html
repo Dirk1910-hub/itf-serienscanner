@@ -30,8 +30,16 @@
       <video id="preview" playsinline muted></video>
       <div class="scan-guide" aria-hidden="true"><span></span></div>
       <div id="camera-placeholder" class="camera-placeholder">
-        <div class="barcode-icon" aria-hidden="true">▥</div>
-        <p>Kamera starten. Barcodes können waagerecht oder senkrecht gehalten werden.</p>
+        <div class="toilet-illustration" role="img" aria-label="Gezeichnete Toilette">
+          <svg viewBox="0 0 120 100" aria-hidden="true">
+            <path d="M20 8h39v38H20z M17 8h45" />
+            <circle cx="51" cy="17" r="2.5" class="toilet-accent" />
+            <path d="M56 43h44c0 19-11 31-31 31H55c-10 0-17-7-17-17v-5h18z" />
+            <path d="M63 74v11h27l5 8H48l5-19 M35 47h62" />
+            <path d="M27 25v12 M34 25v12 M41 25v12" class="toilet-barcode" />
+          </svg>
+        </div>
+        <p>Kamera starten. Die Bildausrichtung bleibt beim Drehen fixiert.</p>
       </div>
       <button id="start-scan" class="primary camera-action" type="button">Kamera starten</button>
       <button id="stop-scan" class="secondary camera-action hidden" type="button">Kamera stoppen</button>

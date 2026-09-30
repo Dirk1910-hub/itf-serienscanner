@@ -1,5 +1,5 @@
-const CACHE = 'itf-scanner-v3';
-const ASSETS = ['./', './index.html', './styles.css', './app.js', './scanner-state.js', './frame-decoder.js', './audio-feedback.js', './scan-erfolgreich.wav', './scan-doppelt.wav', './manifest.webmanifest', './icon-192.png', './icon-512.png', './vendor/zxing-browser.min.js'];
+const CACHE = 'itf-scanner-v4';
+const ASSETS = ['./', './index.html', './styles.css', './app.js', './scanner-state.js', './frame-decoder.js', './audio-feedback.js', './camera-orientation.js', './scan-erfolgreich.wav', './scan-doppelt.wav', './manifest.webmanifest', './icon-192.png', './icon-512.png', './vendor/zxing-browser.min.js'];
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));

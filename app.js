@@ -1,13 +1,14 @@
 import { addScan, createTextFileContent } from './scanner-state.js';
 import { decodeCanvasBothOrientations } from './frame-decoder.js';
 import { playSound, unlockSound } from './audio-feedback.js';
+import { cameraCounterTransform, requestPortraitLock } from './camera-orientation.js';
 
 const EMAIL = 'thinnes13@freenet.de';
 const STORAGE_KEY = 'itf-scanner-scans-v1';
 const $ = (selector) => document.querySelector(selector);
 
 const elements = {
-  preview: $('#preview'), placeholder: $('#camera-placeholder'), start: $('#start-scan'), stop: $('#stop-scan'),
+  preview: $('#preview'), cameraCard: $('.camera-card'), placeholder: $('#camera-placeholder'), start: $('#start-scan'), stop: $('#stop-scan'),
   status: $('#status'), count: $('#count'), list: $('#scan-list'), undo: $('#undo'), finish: $('#finish'), reset: $('#reset'),
   panel: $('#finish-panel'), finishCount: $('#finish-count'), email: $('#email'), share: $('#share-file'), continue: $('#continue'),
   successSound: $('#success-sound'), duplicateSound: $('#duplicate-sound')
@@ -17,6 +18,7 @@ let scans = loadScans();
 let cameraStream = null;
 let scanTimer = null;
 let scannerActive = false;
+let orientationLocked = false;
 let frameReader = null;
 const frameCanvas = document.createElement('canvas');
 const rotatedCanvas = document.createElement('canvas');
@@ -98,6 +100,27 @@ function handleDetectedCode(rawCode) {
   setStatus(`Scan ${scans.length} gespeichert: ${code}`, 'success');
 }
 
+function currentScreenAngle() {
+  if (Number.isFinite(screen.orientation?.angle)) return screen.orientation.angle;
+  return Number(window.orientation) || 0;
+}
+
+function applyCameraOrientation() {
+  if (!scannerActive || orientationLocked) {
+    elements.preview.style.transform = '';
+    elements.preview.dataset.counterRotation = '0';
+    return;
+  }
+  const rect = elements.cameraCard.getBoundingClientRect();
+  const { rotation, scale } = cameraCounterTransform(currentScreenAngle(), rect.width, rect.height);
+  elements.preview.style.transform = `rotate(${rotation}deg) scale(${scale})`;
+  elements.preview.dataset.counterRotation = String(rotation);
+}
+
+function scheduleCameraOrientationUpdate() {
+  requestAnimationFrame(() => requestAnimationFrame(applyCameraOrientation));
+}
+
 function scanNextFrame() {
   if (!scannerActive) return;
   if (elements.preview.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && elements.preview.videoWidth) {
@@ -124,7 +147,9 @@ function scanNextFrame() {
 }
 
 async function startScanner() {
+  const orientationLockPromise = requestPortraitLock(screen.orientation);
   await prepareAudio();
+  orientationLocked = await orientationLockPromise;
   if (scannerActive) return;
   if (!window.isSecureContext && location.hostname !== 'localhost') {
     setStatus('Die Kamera benötigt eine sichere HTTPS-Verbindung.', 'error');
@@ -144,11 +169,12 @@ async function startScanner() {
     elements.preview.srcObject = cameraStream;
     await elements.preview.play();
     scannerActive = true;
+    scheduleCameraOrientationUpdate();
     scanNextFrame();
     elements.placeholder.classList.add('hidden');
     elements.start.classList.add('hidden');
     elements.stop.classList.remove('hidden');
-    setStatus('Kamera aktiv – Barcode waagerecht oder senkrecht halten', 'neutral');
+    setStatus('Kamera aktiv – Bildausrichtung fixiert', 'neutral');
   } catch (error) {
     cameraStream?.getTracks().forEach((track) => track.stop());
     cameraStream = null;
@@ -159,6 +185,10 @@ async function startScanner() {
 
 function stopScanner() {
   scannerActive = false;
+  if (orientationLocked && typeof screen.orientation?.unlock === 'function') screen.orientation.unlock();
+  orientationLocked = false;
+  elements.preview.style.transform = '';
+  elements.preview.dataset.counterRotation = '0';
   clearTimeout(scanTimer);
   scanTimer = null;
   cameraStream?.getTracks().forEach((track) => track.stop());
@@ -231,6 +261,9 @@ elements.continue.addEventListener('click', () => {
   elements.panel.classList.add('hidden');
   startScanner();
 });
+window.addEventListener('orientationchange', scheduleCameraOrientationUpdate);
+window.addEventListener('resize', scheduleCameraOrientationUpdate);
+screen.orientation?.addEventListener?.('change', scheduleCameraOrientationUpdate);
 
 saveAndRender();
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
