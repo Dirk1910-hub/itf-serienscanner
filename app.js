@@ -1,4 +1,5 @@
 import { addScan, createTextFileContent } from './scanner-state.js';
+import { decodeCanvasBothOrientations } from './frame-decoder.js';
 
 const EMAIL = 'thinnes13@freenet.de';
 const STORAGE_KEY = 'itf-scanner-scans-v1';
@@ -11,7 +12,12 @@ const elements = {
 };
 
 let scans = loadScans();
-let controls = null;
+let cameraStream = null;
+let scanTimer = null;
+let scannerActive = false;
+let frameReader = null;
+const frameCanvas = document.createElement('canvas');
+const rotatedCanvas = document.createElement('canvas');
 let audioContext = null;
 let blockedCode = null;
 let lastDecodeAt = 0;
@@ -78,8 +84,34 @@ function handleDetectedCode(rawCode) {
   setStatus(`Scan ${scans.length} gespeichert: ${code}`, 'success');
 }
 
+function scanNextFrame() {
+  if (!scannerActive) return;
+  if (elements.preview.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && elements.preview.videoWidth) {
+    const sourceWidth = elements.preview.videoWidth;
+    const sourceHeight = elements.preview.videoHeight;
+    const scale = Math.min(1, 1280 / Math.max(sourceWidth, sourceHeight));
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+    if (frameCanvas.width !== width || frameCanvas.height !== height) {
+      frameCanvas.width = width;
+      frameCanvas.height = height;
+    }
+    const context = frameCanvas.getContext('2d', { alpha: false });
+    context.drawImage(elements.preview, 0, 0, width, height);
+    try {
+      const result = decodeCanvasBothOrientations(frameReader, frameCanvas, rotatedCanvas);
+      lastDecodeAt = Date.now();
+      handleDetectedCode(result.getText());
+    } catch {
+      if (blockedCode && Date.now() - lastDecodeAt > 1200) blockedCode = null;
+    }
+  }
+  scanTimer = setTimeout(scanNextFrame, 140);
+}
+
 async function startScanner() {
   prepareAudio();
+  if (scannerActive) return;
   if (!window.isSecureContext && location.hostname !== 'localhost') {
     setStatus('Die Kamera benötigt eine sichere HTTPS-Verbindung.', 'error');
     return;
@@ -89,35 +121,35 @@ async function startScanner() {
     return;
   }
   try {
-    const reader = new ZXingBrowser.BrowserMultiFormatReader(undefined, {
-      delayBetweenScanAttempts: 90,
-      delayBetweenScanSuccess: 180
-    });
-    reader.possibleFormats = [ZXingBrowser.BarcodeFormat.ITF];
-    controls = await reader.decodeFromConstraints({
+    frameReader = new ZXingBrowser.BrowserMultiFormatReader();
+    frameReader.possibleFormats = [ZXingBrowser.BarcodeFormat.ITF];
+    cameraStream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
-    }, elements.preview, (result) => {
-      if (result) {
-        lastDecodeAt = Date.now();
-        handleDetectedCode(result.getText());
-      } else if (blockedCode && Date.now() - lastDecodeAt > 1200) {
-        blockedCode = null;
-      }
     });
+    elements.preview.srcObject = cameraStream;
+    await elements.preview.play();
+    scannerActive = true;
+    scanNextFrame();
     elements.placeholder.classList.add('hidden');
     elements.start.classList.add('hidden');
     elements.stop.classList.remove('hidden');
-    setStatus('Kamera aktiv – ITF-Barcode in den Rahmen halten', 'neutral');
+    setStatus('Kamera aktiv – Barcode waagerecht oder senkrecht halten', 'neutral');
   } catch (error) {
+    cameraStream?.getTracks().forEach((track) => track.stop());
+    cameraStream = null;
     const denied = error?.name === 'NotAllowedError';
     setStatus(denied ? 'Kamerazugriff wurde nicht erlaubt.' : 'Kamera konnte nicht gestartet werden.', 'error');
   }
 }
 
 function stopScanner() {
-  controls?.stop();
-  controls = null;
+  scannerActive = false;
+  clearTimeout(scanTimer);
+  scanTimer = null;
+  cameraStream?.getTracks().forEach((track) => track.stop());
+  cameraStream = null;
+  elements.preview.srcObject = null;
   elements.stop.classList.add('hidden');
   elements.start.classList.remove('hidden');
   elements.placeholder.classList.remove('hidden');
