@@ -1,4 +1,4 @@
-const CACHE = 'itf-scanner-v4';
+const CACHE = 'itf-scanner-v5';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './scanner-state.js', './frame-decoder.js', './audio-feedback.js', './camera-orientation.js', './scan-erfolgreich.wav', './scan-doppelt.wav', './manifest.webmanifest', './icon-192.png', './icon-512.png', './vendor/zxing-browser.min.js'];
 self.addEventListener('install', (event) => {
   self.skipWaiting();

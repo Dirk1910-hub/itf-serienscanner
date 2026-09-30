@@ -1,5 +1,5 @@
-import { addScan, createTextFileContent } from './scanner-state.js';
-import { decodeCanvasBothOrientations } from './frame-decoder.js';
+import { addScan, createTextFileContent, isValidManualCode } from './scanner-state.js';
+import { decodeFrameCandidates } from './frame-decoder.js';
 import { playSound, unlockSound } from './audio-feedback.js';
 import { cameraCounterTransform, requestPortraitLock } from './camera-orientation.js';
 
@@ -11,6 +11,8 @@ const elements = {
   preview: $('#preview'), cameraCard: $('.camera-card'), placeholder: $('#camera-placeholder'), start: $('#start-scan'), stop: $('#stop-scan'),
   status: $('#status'), count: $('#count'), list: $('#scan-list'), undo: $('#undo'), finish: $('#finish'), reset: $('#reset'),
   panel: $('#finish-panel'), finishCount: $('#finish-count'), email: $('#email'), share: $('#share-file'), continue: $('#continue'),
+  manualOpen: $('#manual-open'), manualPanel: $('#manual-panel'), manualForm: $('#manual-form'), manualCode: $('#manual-code'),
+  manualCancel: $('#manual-cancel'), manualError: $('#manual-error'), manualCount: $('#manual-count'),
   successSound: $('#success-sound'), duplicateSound: $('#duplicate-sound')
 };
 
@@ -22,6 +24,8 @@ let orientationLocked = false;
 let frameReader = null;
 const frameCanvas = document.createElement('canvas');
 const rotatedCanvas = document.createElement('canvas');
+const cropCanvas = document.createElement('canvas');
+const rotatedCropCanvas = document.createElement('canvas');
 let audioContext = null;
 let blockedCode = null;
 let lastDecodeAt = 0;
@@ -83,21 +87,28 @@ async function beep(kind = 'success') {
   oscillator.stop(start + (kind === 'success' ? 0.17 : 0.29));
 }
 
-function handleDetectedCode(rawCode) {
-  const code = String(rawCode).trim();
-  if (!code || code === blockedCode) return;
-  blockedCode = code;
-  lastDecodeAt = Date.now();
+function storeCode(rawCode, source = 'scan') {
+  const code = String(rawCode);
   const result = addScan(scans, code);
   scans = result.scans;
   if (result.status === 'duplicate') {
     void beep('duplicate');
     setStatus(`Bereits erfasst: ${code}`, 'warning');
-    return;
+    return result;
   }
   void beep('success');
   saveAndRender();
-  setStatus(`Scan ${scans.length} gespeichert: ${code}`, 'success');
+  const label = source === 'manual' ? 'Manuell gespeichert' : `Scan ${scans.length} gespeichert`;
+  setStatus(`${label}: ${code}`, 'success');
+  return result;
+}
+
+function handleDetectedCode(rawCode) {
+  const code = String(rawCode).trim();
+  if (!code || code === blockedCode) return;
+  blockedCode = code;
+  lastDecodeAt = Date.now();
+  storeCode(code);
 }
 
 function currentScreenAngle() {
@@ -126,7 +137,7 @@ function scanNextFrame() {
   if (elements.preview.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && elements.preview.videoWidth) {
     const sourceWidth = elements.preview.videoWidth;
     const sourceHeight = elements.preview.videoHeight;
-    const scale = Math.min(1, 1280 / Math.max(sourceWidth, sourceHeight));
+    const scale = Math.min(1, 1920 / Math.max(sourceWidth, sourceHeight));
     const width = Math.max(1, Math.round(sourceWidth * scale));
     const height = Math.max(1, Math.round(sourceHeight * scale));
     if (frameCanvas.width !== width || frameCanvas.height !== height) {
@@ -136,14 +147,14 @@ function scanNextFrame() {
     const context = frameCanvas.getContext('2d', { alpha: false });
     context.drawImage(elements.preview, 0, 0, width, height);
     try {
-      const result = decodeCanvasBothOrientations(frameReader, frameCanvas, rotatedCanvas);
+      const result = decodeFrameCandidates(frameReader, frameCanvas, rotatedCanvas, cropCanvas, rotatedCropCanvas);
       lastDecodeAt = Date.now();
       handleDetectedCode(result.getText());
     } catch {
       if (blockedCode && Date.now() - lastDecodeAt > 1200) blockedCode = null;
     }
   }
-  scanTimer = setTimeout(scanNextFrame, 140);
+  scanTimer = setTimeout(scanNextFrame, 180);
 }
 
 async function startScanner() {
@@ -164,8 +175,22 @@ async function startScanner() {
     frameReader.possibleFormats = [ZXingBrowser.BarcodeFormat.ITF];
     cameraStream = await navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 2560 },
+        height: { ideal: 1440 },
+        frameRate: { ideal: 30 }
+      }
     });
+    const cameraTrack = cameraStream.getVideoTracks()[0];
+    try {
+      const capabilities = cameraTrack.getCapabilities?.() || {};
+      const advanced = {};
+      if (capabilities.focusMode?.includes?.('continuous')) advanced.focusMode = 'continuous';
+      if (capabilities.exposureMode?.includes?.('continuous')) advanced.exposureMode = 'continuous';
+      if (capabilities.whiteBalanceMode?.includes?.('continuous')) advanced.whiteBalanceMode = 'continuous';
+      if (Object.keys(advanced).length) await cameraTrack.applyConstraints({ advanced: [advanced] });
+    } catch { /* iOS ignoriert nicht unterstützte Kameraoptionen. */ }
     elements.preview.srcObject = cameraStream;
     await elements.preview.play();
     scannerActive = true;
@@ -235,8 +260,59 @@ function openEmail() {
   location.href = `mailto:${EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
+function closeManualPanel() {
+  elements.manualPanel.classList.add('hidden');
+  elements.manualOpen.classList.remove('hidden');
+  elements.manualCode.value = '';
+  elements.manualCode.removeAttribute('aria-invalid');
+  elements.manualError.classList.add('hidden');
+  elements.manualCount.textContent = '0/10';
+}
+
+function showManualError(message) {
+  elements.manualError.textContent = message;
+  elements.manualError.classList.remove('hidden');
+  elements.manualCode.setAttribute('aria-invalid', 'true');
+  elements.manualCode.focus();
+}
+
+function openManualPanel() {
+  if (scannerActive) stopScanner();
+  elements.manualOpen.classList.add('hidden');
+  elements.manualPanel.classList.remove('hidden');
+  elements.manualError.classList.add('hidden');
+  elements.manualCode.removeAttribute('aria-invalid');
+  elements.manualPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => elements.manualCode.focus(), 150);
+}
+
+function submitManualCode(event) {
+  event.preventDefault();
+  const code = elements.manualCode.value;
+  if (!isValidManualCode(code)) {
+    showManualError('Bitte genau 10 Ziffern eingeben.');
+    return;
+  }
+  const result = storeCode(code, 'manual');
+  if (result.status === 'duplicate') {
+    showManualError('Diese Nummer wurde bereits erfasst.');
+    return;
+  }
+  closeManualPanel();
+}
+
 elements.start.addEventListener('click', startScanner);
 elements.stop.addEventListener('click', stopScanner);
+elements.manualOpen.addEventListener('click', openManualPanel);
+elements.manualCancel.addEventListener('click', closeManualPanel);
+elements.manualForm.addEventListener('submit', submitManualCode);
+elements.manualCode.addEventListener('input', () => {
+  const digits = elements.manualCode.value.replace(/\D/g, '').slice(0, 10);
+  if (elements.manualCode.value !== digits) elements.manualCode.value = digits;
+  elements.manualCount.textContent = `${digits.length}/10`;
+  elements.manualCode.removeAttribute('aria-invalid');
+  elements.manualError.classList.add('hidden');
+});
 elements.undo.addEventListener('click', () => {
   if (!scans.length) return;
   const removed = scans.at(-1).code;

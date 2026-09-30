@@ -3,9 +3,10 @@ ITF SERIENSCANNER – KURZANLEITUNG
 
 Funktionen
 - Liest ausschließlich ITF-Barcodes (Interleaved 2 of 5).
-- Schreibt jeden neuen Code fortlaufend nummeriert in die Textliste.
+- Schreibt jeden neuen Code als `'1234567890',` in eine eigene Zeile.
 - Meldet doppelte Codes und trägt sie nicht erneut ein.
-- Gibt nach einem erfolgreichen Scan einen Bestätigungston aus.
+- Ermöglicht die manuelle Eingabe einer Nummer mit genau 10 Ziffern, falls ein Barcode beschädigt ist.
+- Gibt nach einem erfolgreichen Scan oder einer manuellen Eingabe einen Bestätigungston aus.
 - Speichert die aktuelle Liste lokal auf dem Gerät.
 - Erstellt eine TXT-Datei oder öffnet eine E-Mail an thinnes13@freenet.de.
 
