@@ -1,0 +1,27 @@
+ITF SERIENSCANNER – KURZANLEITUNG
+==================================
+
+Funktionen
+- Liest ausschließlich ITF-Barcodes (Interleaved 2 of 5).
+- Schreibt jeden neuen Code fortlaufend nummeriert in die Textliste.
+- Meldet doppelte Codes und trägt sie nicht erneut ein.
+- Gibt nach einem erfolgreichen Scan einen Bestätigungston aus.
+- Speichert die aktuelle Liste lokal auf dem Gerät.
+- Erstellt eine TXT-Datei oder öffnet eine E-Mail an thinnes13@freenet.de.
+
+Installation auf dem iPhone
+1. Den Inhalt dieses Ordners auf einem HTTPS-Webserver veröffentlichen.
+2. Die HTTPS-Adresse in Safari öffnen.
+3. In Safari auf „Teilen“ tippen.
+4. „Zum Home-Bildschirm“ auswählen.
+5. Die installierte App öffnen und den Kamerazugriff erlauben.
+
+Hinweis zum E-Mail-Versand
+Eine Web-App darf E-Mails nicht unbemerkt versenden. „E-Mail mit Liste öffnen“ öffnet eine
+fertig adressierte E-Mail mit den Nummern im Nachrichtentext. Für sehr lange Listen ist
+„TXT-Datei teilen“ vorgesehen: Die Empfängeradresse wird kopiert; anschließend im iPhone-
+Teilen-Menü „Mail“ wählen und die Adresse einsetzen.
+
+Datenschutz
+Die gescannten Nummern bleiben im lokalen Speicher des Geräts, bis „Liste vollständig
+löschen“ gewählt oder die Website-Daten im Browser gelöscht werden.
