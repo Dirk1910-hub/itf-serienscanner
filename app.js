@@ -24,8 +24,10 @@ let orientationLocked = false;
 let frameReader = null;
 const frameCanvas = document.createElement('canvas');
 const rotatedCanvas = document.createElement('canvas');
-const cropCanvas = document.createElement('canvas');
-const rotatedCropCanvas = document.createElement('canvas');
+const horizontalCropCanvas = document.createElement('canvas');
+const rotatedHorizontalCropCanvas = document.createElement('canvas');
+const verticalCropCanvas = document.createElement('canvas');
+const rotatedVerticalCropCanvas = document.createElement('canvas');
 let audioContext = null;
 let blockedCode = null;
 let lastDecodeAt = 0;
@@ -147,7 +149,11 @@ function scanNextFrame() {
     const context = frameCanvas.getContext('2d', { alpha: false });
     context.drawImage(elements.preview, 0, 0, width, height);
     try {
-      const result = decodeFrameCandidates(frameReader, frameCanvas, rotatedCanvas, cropCanvas, rotatedCropCanvas);
+      const result = decodeFrameCandidates(
+        frameReader, frameCanvas, rotatedCanvas,
+        horizontalCropCanvas, rotatedHorizontalCropCanvas,
+        verticalCropCanvas, rotatedVerticalCropCanvas
+      );
       lastDecodeAt = Date.now();
       handleDetectedCode(result.getText());
     } catch {
@@ -173,6 +179,9 @@ async function startScanner() {
   try {
     frameReader = new ZXingBrowser.BrowserMultiFormatReader();
     frameReader.possibleFormats = [ZXingBrowser.BarcodeFormat.ITF];
+    frameReader.hints?.set?.(3, true);
+    frameReader.hints?.set?.(5, Int32Array.from([10]));
+    frameReader.setHints?.(frameReader.hints);
     cameraStream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: {

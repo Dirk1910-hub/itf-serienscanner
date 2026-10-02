@@ -10,7 +10,7 @@ export function addScan(scans, rawCode) {
 }
 
 export function createTextFileContent(scans) {
-  return scans.map((scan) => `'${scan.code}',`).join('\n') + (scans.length ? '\n' : '');
+  return scans.map((scan) => scan.code).join('\n') + (scans.length ? '\n' : '');
 }
 
 export function isValidManualCode(value) {

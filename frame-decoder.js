@@ -23,9 +23,14 @@ export function decodeCanvasBothOrientations(
   }
 }
 
-export function cropCanvasCenter(sourceCanvas, targetCanvas = document.createElement('canvas')) {
-  const cropWidth = Math.max(1, Math.round(sourceCanvas.width * 0.94));
-  const cropHeight = Math.max(1, Math.round(sourceCanvas.height * 0.62));
+export function cropCanvasCenter(
+  sourceCanvas,
+  targetCanvas = document.createElement('canvas'),
+  widthRatio = 0.98,
+  heightRatio = 0.5
+) {
+  const cropWidth = Math.max(1, Math.round(sourceCanvas.width * widthRatio));
+  const cropHeight = Math.max(1, Math.round(sourceCanvas.height * heightRatio));
   const sourceX = Math.round((sourceCanvas.width - cropWidth) / 2);
   const sourceY = Math.round((sourceCanvas.height - cropHeight) / 2);
   targetCanvas.width = cropWidth;
@@ -39,14 +44,25 @@ export function decodeFrameCandidates(
   reader,
   fullCanvas,
   rotatedFullCanvas,
-  cropCanvas,
-  rotatedCropCanvas,
+  horizontalCropCanvas,
+  rotatedHorizontalCropCanvas,
+  verticalCropCanvas,
+  rotatedVerticalCropCanvas,
   crop = cropCanvasCenter,
   decodeBoth = decodeCanvasBothOrientations
 ) {
-  try {
-    return decodeBoth(reader, crop(fullCanvas, cropCanvas), rotatedCropCanvas);
-  } catch {
-    return decodeBoth(reader, fullCanvas, rotatedFullCanvas);
+  const candidates = [
+    [crop(fullCanvas, horizontalCropCanvas, 0.98, 0.5), rotatedHorizontalCropCanvas],
+    [crop(fullCanvas, verticalCropCanvas, 0.5, 0.98), rotatedVerticalCropCanvas],
+    [fullCanvas, rotatedFullCanvas]
+  ];
+  let lastError;
+  for (const [canvas, rotatedCanvas] of candidates) {
+    try {
+      return decodeBoth(reader, canvas, rotatedCanvas);
+    } catch (error) {
+      lastError = error;
+    }
   }
+  throw lastError;
 }
