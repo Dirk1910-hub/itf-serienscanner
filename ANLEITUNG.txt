@@ -2,7 +2,7 @@ ITF SERIENSCANNER – KURZANLEITUNG
 ==================================
 
 Funktionen
-- Liest ausschließlich ITF-Barcodes (Interleaved 2 of 5).
+- Liest ausschließlich ITF-Barcodes (Interleaved 2 of 5) mit genau 10 Ziffern.
 - Schreibt jeden neuen Code als reine Zahl in eine eigene Zeile.
 - Meldet doppelte Codes und trägt sie nicht erneut ein.
 - Ermöglicht die manuelle Eingabe einer Nummer mit genau 10 Ziffern, falls ein Barcode beschädigt ist.

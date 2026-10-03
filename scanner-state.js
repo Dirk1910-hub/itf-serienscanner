@@ -16,3 +16,7 @@ export function createTextFileContent(scans) {
 export function isValidManualCode(value) {
   return /^\d{10}$/.test(String(value));
 }
+
+export function isValidScannedCode(value) {
+  return /^\d{10}$/.test(String(value));
+}

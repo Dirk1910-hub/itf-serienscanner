@@ -1,4 +1,4 @@
-import { addScan, createTextFileContent, isValidManualCode } from './scanner-state.js';
+import { addScan, createTextFileContent, isValidManualCode, isValidScannedCode } from './scanner-state.js';
 import { decodeFrameCandidates } from './frame-decoder.js';
 import { playSound, unlockSound } from './audio-feedback.js';
 import { cameraCounterTransform, requestPortraitLock } from './camera-orientation.js';
@@ -106,8 +106,8 @@ function storeCode(rawCode, source = 'scan') {
 }
 
 function handleDetectedCode(rawCode) {
-  const code = String(rawCode).trim();
-  if (!code || code === blockedCode) return;
+  const code = String(rawCode);
+  if (!isValidScannedCode(code) || code === blockedCode) return;
   blockedCode = code;
   lastDecodeAt = Date.now();
   storeCode(code);
