@@ -10,7 +10,8 @@ Funktionen
 - Gibt nach einem erfolgreichen Scan oder einer manuellen Eingabe einen Bestätigungston aus.
 - Speichert die aktuelle Liste lokal auf dem Gerät.
 - Erstellt eine TXT-Datei oder öffnet eine E-Mail an thinnes13@freenet.de.
-- Berechnet für einen 7-stelligen Modelmaster tägliche Netto-Mengen und Lagereingänge.
+- Berechnet für einen 7-stelligen Modelmaster mit Bezeichnung, 4-stelliger Presse und Werkstoff tägliche Netto-Mengen und Lagereingänge.
+- Der Werkstoff ist als Auswahl zwischen TitanCerm und Vilboplus hinterlegt.
 - Rechnet den ersten Eingusstag mit 60 % der Brutto-Tagesmenge und rundet das Tages-Netto.
 - Fasst Lagereingänge von Samstag bis Freitag mit Kalenderwoche und Freitagsdatum zusammen.
 - Erstellt eine Excel-Datei mit Wochenplan und Tageswerten zum Teilen per E-Mail.

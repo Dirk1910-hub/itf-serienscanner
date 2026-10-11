@@ -20,9 +20,9 @@ const elements = {
 const deliveryElements = {
   startScreen: $('#start-screen'), scannerScreen: $('#scanner-screen'), deliveryScreen: $('#delivery-screen'),
   openScanner: $('#open-scanner'), openDelivery: $('#open-delivery'), form: $('#delivery-form'),
-  errors: $('#delivery-errors'), results: $('#delivery-results'), model: $('#result-model'),
+  errors: $('#delivery-errors'), results: $('#delivery-results'), model: $('#result-model'), meta: $('#result-meta'),
   tableBody: $('#delivery-table-body'), share: $('#export-excel'), download: $('#download-excel'),
-  reset: $('#reset-delivery'), shareStatus: $('#delivery-share-status'), modelInput: $('#modelmaster')
+  reset: $('#reset-delivery'), shareStatus: $('#delivery-share-status'), modelInput: $('#modelmaster'), pressInput: $('#press')
 };
 
 let scans = loadScans();
@@ -336,6 +336,9 @@ function readDeliveryInput() {
   const data = new FormData(deliveryElements.form);
   return {
     modelmaster: String(data.get('modelmaster') || '').toUpperCase(),
+    designation: String(data.get('designation') || '').trim(),
+    press: String(data.get('press') || '').toUpperCase(),
+    material: String(data.get('material') || ''),
     startDate: String(data.get('startDate') || ''),
     endDate: String(data.get('endDate') || ''),
     grossPerDay: Number(data.get('grossPerDay')),
@@ -362,6 +365,7 @@ function showDeliveryErrors(errors) {
 
 function renderDeliveryResults(plan) {
   deliveryElements.model.textContent = plan.input.modelmaster;
+  deliveryElements.meta.textContent = `${plan.input.designation} · Presse ${plan.input.press} · ${plan.input.material}`;
   deliveryElements.tableBody.replaceChildren();
   for (const row of plan.weekly) {
     const tableRow = document.createElement('tr');
@@ -382,24 +386,27 @@ function makeDeliveryExcelFile() {
   const { input, daily, weekly } = currentDelivery;
   const summaryRows = [
     ['Lieferplan', input.modelmaster],
+    ['Bezeichnung', input.designation],
+    ['Presse', input.press],
+    ['Werkstoff', input.material],
     ['Startdatum Einguss', formatGermanDate(input.startDate)],
     ['Enddatum Einguss', formatGermanDate(input.endDate)],
     ['Brutto pro Tag', input.grossPerDay],
     ['Durchlaufzeit in Tagen', input.leadTimeDays],
     ['Yield in %', input.yieldPercent],
     [],
-    ['Modelmaster', 'Kalenderwoche', 'Freitag', 'Netto-Lagereingang'],
-    ...weekly.map((row) => [row.modelmaster, row.calendarWeek, formatGermanDate(row.fridayDate), row.netTotal])
+    ['Modelmaster', 'Bezeichnung', 'Presse', 'Werkstoff', 'Kalenderwoche', 'Freitag', 'Netto-Lagereingang'],
+    ...weekly.map((row) => [row.modelmaster, input.designation, input.press, input.material, row.calendarWeek, formatGermanDate(row.fridayDate), row.netTotal])
   ];
   const detailRows = [
-    ['Modelmaster', 'Eingussdatum', 'Brutto', 'Netto', 'Lagereingang'],
-    ...daily.map((row) => [row.modelmaster, formatGermanDate(row.castingDate), row.gross, row.net, formatGermanDate(row.warehouseDate)])
+    ['Modelmaster', 'Bezeichnung', 'Presse', 'Werkstoff', 'Eingussdatum', 'Brutto', 'Netto', 'Lagereingang'],
+    ...daily.map((row) => [row.modelmaster, input.designation, input.press, input.material, formatGermanDate(row.castingDate), row.gross, row.net, formatGermanDate(row.warehouseDate)])
   ];
   const workbook = XLSX.utils.book_new();
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
   const detailSheet = XLSX.utils.aoa_to_sheet(detailRows);
-  summarySheet['!cols'] = [{ wch: 24 }, { wch: 17 }, { wch: 15 }, { wch: 22 }];
-  detailSheet['!cols'] = [{ wch: 16 }, { wch: 16 }, { wch: 13 }, { wch: 13 }, { wch: 16 }];
+  summarySheet['!cols'] = [{ wch: 18 }, { wch: 24 }, { wch: 12 }, { wch: 15 }, { wch: 17 }, { wch: 15 }, { wch: 22 }];
+  detailSheet['!cols'] = [{ wch: 16 }, { wch: 24 }, { wch: 12 }, { wch: 15 }, { wch: 16 }, { wch: 13 }, { wch: 13 }, { wch: 16 }];
   XLSX.utils.book_append_sheet(workbook, summarySheet, 'Wochenplan');
   XLSX.utils.book_append_sheet(workbook, detailSheet, 'Tageswerte');
   const bytes = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
@@ -444,6 +451,7 @@ function resetDeliveryPlan(ask = true) {
   deliveryElements.tableBody.replaceChildren();
   deliveryElements.results.classList.add('hidden');
   deliveryElements.model.textContent = '';
+  deliveryElements.meta.textContent = '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -455,6 +463,9 @@ document.querySelectorAll('[data-back-home]').forEach((button) => button.addEven
 }));
 deliveryElements.modelInput.addEventListener('input', () => {
   deliveryElements.modelInput.value = deliveryElements.modelInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
+});
+deliveryElements.pressInput.addEventListener('input', () => {
+  deliveryElements.pressInput.value = deliveryElements.pressInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
 });
 deliveryElements.form.addEventListener('submit', (event) => {
   event.preventDefault();

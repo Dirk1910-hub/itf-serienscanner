@@ -23,6 +23,18 @@ export function validateDeliveryInput(input) {
   if (!/^[A-Za-z0-9]{7}$/.test(String(input.modelmaster || ''))) {
     errors.push('Modelmaster muss genau 7 Buchstaben oder Ziffern enthalten.');
   }
+  const designation = String(input.designation || '').trim();
+  if (!designation) {
+    errors.push('Bezeichnung muss eingegeben werden.');
+  } else if (!/^[\p{L}\p{N} .&/_-]{1,60}$/u.test(designation)) {
+    errors.push('Bezeichnung enthält nicht erlaubte Zeichen.');
+  }
+  if (!/^[A-Za-z0-9]{4}$/.test(String(input.press || ''))) {
+    errors.push('Presse muss genau 4 Buchstaben oder Ziffern enthalten.');
+  }
+  if (!['TitanCerm', 'Vilboplus'].includes(input.material)) {
+    errors.push('Bitte TitanCerm oder Vilboplus auswählen.');
+  }
   if (!isValidIsoDate(input.startDate) || !isValidIsoDate(input.endDate)) {
     errors.push('Bitte Start- und Enddatum vollständig eingeben.');
   } else if (input.endDate < input.startDate) {

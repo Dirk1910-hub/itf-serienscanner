@@ -10,10 +10,10 @@
   <title>Produktionshelfer</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=9">
+  <link rel="stylesheet" href="styles.css?v=10">
   <script defer src="vendor/zxing-browser.min.js"></script>
   <script defer src="vendor/xlsx.full.min.js"></script>
-  <script type="module" src="app.js?v=9"></script>
+  <script type="module" src="app.js?v=10"></script>
 </head>
 <body>
   <audio id="success-sound" preload="auto" playsinline src="scan-erfolgreich.wav"></audio>
@@ -27,7 +27,9 @@
       </header>
       <div class="menu-grid">
         <button id="open-scanner" class="menu-card" type="button">
-          <span class="menu-icon" aria-hidden="true">▥</span>
+          <span class="menu-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48"><path d="M7 15h8l3-5h12l3 5h8v24H7z"/><circle cx="24" cy="27" r="8"/></svg>
+          </span>
           <span><strong>Ident scannen</strong><small>ITF-Barcodes erfassen und als Liste weitergeben</small></span>
           <span class="menu-arrow" aria-hidden="true">›</span>
         </button>
@@ -119,6 +121,14 @@
         <label for="modelmaster">Modelmaster <span>7-stellig, Buchstaben und Ziffern</span></label>
         <input id="modelmaster" name="modelmaster" type="text" maxlength="7" pattern="[A-Za-z0-9]{7}" autocapitalize="characters" autocomplete="off" placeholder="A1B2C3D" required>
 
+        <label for="designation">Bezeichnung <span>Name oder Kollektion des Artikels</span></label>
+        <input id="designation" name="designation" type="text" maxlength="60" autocomplete="off" placeholder="z. B. Nova 2026" required>
+
+        <div class="form-grid two">
+          <div><label for="press">Presse <span>4-stellig, alphanumerisch</span></label><input id="press" name="press" type="text" maxlength="4" pattern="[A-Za-z0-9]{4}" autocapitalize="characters" autocomplete="off" placeholder="DG08" required></div>
+          <div><label for="material">Werkstoff</label><select id="material" name="material" required><option value="TitanCerm">TitanCerm</option><option value="Vilboplus">Vilboplus</option></select></div>
+        </div>
+
         <div class="form-grid two">
           <div><label for="start-date">Startdatum Einguss</label><input id="start-date" name="startDate" type="date" required></div>
           <div><label for="end-date">Enddatum Einguss</label><input id="end-date" name="endDate" type="date" required></div>
@@ -139,6 +149,7 @@
           <strong id="result-model" class="model-badge"></strong>
         </div>
         <p class="result-note">Zusammenfassung jeweils Samstag bis Freitag. Ausgabe am Freitag.</p>
+        <p id="result-meta" class="result-meta"></p>
         <div class="table-wrap">
           <table>
             <thead><tr><th>KW</th><th>Freitag</th><th>Netto</th></tr></thead>
