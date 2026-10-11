@@ -2,7 +2,7 @@ import { addScan, createTextFileContent, isValidManualCode, isValidScannedCode }
 import { decodeFrameCandidates } from './frame-decoder.js';
 import { playSound, unlockSound } from './audio-feedback.js';
 import { cameraCounterTransform, requestPortraitLock } from './camera-orientation.js';
-import { calculateDailyDeliveries, groupWeeklyDeliveries, validateDeliveryInput } from './delivery-plan.js';
+import { assessCoverage, calculateDailyDeliveries, groupWeeklyDeliveries, validateDeliveryInput } from './delivery-plan.js';
 
 const EMAIL = 'thinnes13@freenet.de';
 const STORAGE_KEY = 'itf-scanner-scans-v1';
@@ -22,7 +22,8 @@ const deliveryElements = {
   openScanner: $('#open-scanner'), openDelivery: $('#open-delivery'), form: $('#delivery-form'),
   errors: $('#delivery-errors'), results: $('#delivery-results'), model: $('#result-model'), meta: $('#result-meta'),
   tableBody: $('#delivery-table-body'), share: $('#export-excel'), download: $('#download-excel'),
-  reset: $('#reset-delivery'), shareStatus: $('#delivery-share-status'), modelInput: $('#modelmaster'), pressInput: $('#press')
+  reset: $('#reset-delivery'), shareStatus: $('#delivery-share-status'), modelInput: $('#modelmaster'), pressInput: $('#press'),
+  shortageInput: $('#shortage'), total: $('#delivery-total'), coverageStatus: $('#coverage-status')
 };
 
 let scans = loadScans();
@@ -334,17 +335,32 @@ function showScreen(screen) {
 
 function readDeliveryInput() {
   const data = new FormData(deliveryElements.form);
+  const shortageValue = String(data.get('shortage') || '');
   return {
     modelmaster: String(data.get('modelmaster') || '').toUpperCase(),
     designation: String(data.get('designation') || '').trim(),
     press: String(data.get('press') || '').toUpperCase(),
     material: String(data.get('material') || ''),
+    shortage: shortageValue === '' ? null : Number(shortageValue),
     startDate: String(data.get('startDate') || ''),
     endDate: String(data.get('endDate') || ''),
     grossPerDay: Number(data.get('grossPerDay')),
     leadTimeDays: Number(data.get('leadTimeDays')),
     yieldPercent: Number(data.get('yieldPercent'))
   };
+}
+
+function coverageMessage(coverage) {
+  const number = (value) => value.toLocaleString('de-DE');
+  if (coverage.status === 'not-provided') return 'Keine Fehlmenge angegeben – es wird nur die Gesamtsumme ausgewiesen.';
+  if (coverage.status === 'exact') return 'Fehlmenge exakt abgedeckt. Es sind weder zusätzliche noch weniger Produktionstage erforderlich.';
+  if (coverage.status === 'shortfall') {
+    return `Nicht abgedeckt: Es fehlen ${number(-coverage.difference)} Teile. Mindestens ${coverage.additionalDays} zusätzliche${coverage.additionalDays === 1 ? 'r Produktionstag' : ' Produktionstage'} mit zusammen ${number(coverage.additionalDays * coverage.fullDayNet)} Teilen ${coverage.additionalDays === 1 ? 'ist' : 'sind'} nötig. Danach beträgt der Lagereingang ${number(coverage.projectedTotal)} Teile und übersteigt die Fehlmenge um ${number(coverage.projectedSurplus)} Teile.`;
+  }
+  const reduction = coverage.reducibleDays > 0
+    ? `Der Plan kann um bis zu ${coverage.reducibleDays} volle${coverage.reducibleDays === 1 ? 'n Produktionstag' : ' Produktionstage'} verkürzt werden. Danach verbleiben ${number(coverage.remainingTotal)} Teile Lagereingang.`
+    : 'Ein voller Produktionstag kann nicht entfallen, ohne die Fehlmenge zu unterschreiten.';
+  return `Fehlmenge abgedeckt: Der Lagereingang übersteigt sie um ${number(coverage.difference)} Teile. ${reduction}`;
 }
 
 function showDeliveryErrors(errors) {
@@ -376,6 +392,9 @@ function renderDeliveryResults(plan) {
     }
     deliveryElements.tableBody.append(tableRow);
   }
+  deliveryElements.total.textContent = `${plan.coverage.totalNet.toLocaleString('de-DE')} Teile`;
+  deliveryElements.coverageStatus.textContent = coverageMessage(plan.coverage);
+  deliveryElements.coverageStatus.className = `coverage-status ${plan.coverage.status}`;
   deliveryElements.results.classList.remove('hidden');
   deliveryElements.shareStatus.innerHTML = `Beim Teilen kannst du „Mail“ auswählen. Empfänger: <span class="email">${EMAIL}</span>`;
   deliveryElements.results.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -383,7 +402,7 @@ function renderDeliveryResults(plan) {
 
 function makeDeliveryExcelFile() {
   if (!currentDelivery || !window.XLSX) return null;
-  const { input, daily, weekly } = currentDelivery;
+  const { input, daily, weekly, coverage } = currentDelivery;
   const summaryRows = [
     ['Lieferplan', input.modelmaster],
     ['Bezeichnung', input.designation],
@@ -394,6 +413,9 @@ function makeDeliveryExcelFile() {
     ['Brutto pro Tag', input.grossPerDay],
     ['Durchlaufzeit in Tagen', input.leadTimeDays],
     ['Yield in %', input.yieldPercent],
+    ['Fehlmenge', input.shortage === null ? 'nicht angegeben' : input.shortage],
+    ['Komplette Summe Lagereingang', coverage.totalNet],
+    ['Deckungsprüfung', coverageMessage(coverage)],
     [],
     ['Modelmaster', 'Bezeichnung', 'Presse', 'Werkstoff', 'Kalenderwoche', 'Freitag', 'Netto-Lagereingang'],
     ...weekly.map((row) => [row.modelmaster, input.designation, input.press, input.material, row.calendarWeek, formatGermanDate(row.fridayDate), row.netTotal])
@@ -452,6 +474,8 @@ function resetDeliveryPlan(ask = true) {
   deliveryElements.results.classList.add('hidden');
   deliveryElements.model.textContent = '';
   deliveryElements.meta.textContent = '';
+  deliveryElements.total.textContent = '';
+  deliveryElements.coverageStatus.textContent = '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -467,6 +491,10 @@ deliveryElements.modelInput.addEventListener('input', () => {
 deliveryElements.pressInput.addEventListener('input', () => {
   deliveryElements.pressInput.value = deliveryElements.pressInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
 });
+deliveryElements.shortageInput.addEventListener('input', () => {
+  const digits = deliveryElements.shortageInput.value.replace(/\D/g, '').slice(0, 6);
+  if (deliveryElements.shortageInput.value !== digits) deliveryElements.shortageInput.value = digits;
+});
 deliveryElements.form.addEventListener('submit', (event) => {
   event.preventDefault();
   const input = readDeliveryInput();
@@ -477,7 +505,7 @@ deliveryElements.form.addEventListener('submit', (event) => {
     return;
   }
   const daily = calculateDailyDeliveries(input);
-  currentDelivery = { input, daily, weekly: groupWeeklyDeliveries(daily) };
+  currentDelivery = { input, daily, weekly: groupWeeklyDeliveries(daily), coverage: assessCoverage(input, daily) };
   renderDeliveryResults(currentDelivery);
 });
 deliveryElements.share.addEventListener('click', shareDeliveryExcel);

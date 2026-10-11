@@ -35,6 +35,10 @@ export function validateDeliveryInput(input) {
   if (!['TitanCerm', 'Vilboplus'].includes(input.material)) {
     errors.push('Bitte TitanCerm oder Vilboplus auswählen.');
   }
+  if (input.shortage !== null && input.shortage !== undefined &&
+      (!Number.isInteger(Number(input.shortage)) || Number(input.shortage) < 0 || Number(input.shortage) > 999999)) {
+    errors.push('Fehlmenge darf höchstens 6 Ziffern enthalten.');
+  }
   if (!isValidIsoDate(input.startDate) || !isValidIsoDate(input.endDate)) {
     errors.push('Bitte Start- und Enddatum vollständig eingeben.');
   } else if (input.endDate < input.startDate) {
@@ -46,6 +50,8 @@ export function validateDeliveryInput(input) {
   }
   if (!(Number(input.yieldPercent) > 0 && Number(input.yieldPercent) <= 100)) {
     errors.push('Yield muss größer als 0 und höchstens 100 % sein.');
+  } else if (Number(input.grossPerDay) > 0 && Math.round(Number(input.grossPerDay) * Number(input.yieldPercent) / 100) < 1) {
+    errors.push('Brutto-Menge und Yield müssen mindestens 1 Netto-Teil pro vollem Produktionstag ergeben.');
   }
   return errors;
 }
@@ -74,6 +80,38 @@ function isoWeek(isoDate) {
   date.setUTCDate(date.getUTCDate() + 4 - weekday);
   const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
   return Math.ceil((((date - yearStart) / DAY_MS) + 1) / 7);
+}
+
+export function assessCoverage(input, rows) {
+  const totalNet = rows.reduce((sum, row) => sum + Number(row.net), 0);
+  const fullDayNet = Math.round(Number(input.grossPerDay) * Number(input.yieldPercent) / 100);
+  const hasShortage = input.shortage !== null && input.shortage !== undefined;
+  if (!hasShortage) {
+    return {
+      totalNet, shortage: null, difference: null, fullDayNet,
+      additionalDays: 0, projectedTotal: totalNet, projectedSurplus: null,
+      reducibleDays: 0, remainingTotal: totalNet, status: 'not-provided'
+    };
+  }
+
+  const shortage = Number(input.shortage);
+  const difference = totalNet - shortage;
+  const additionalDays = difference < 0 ? Math.ceil(-difference / fullDayNet) : 0;
+  const reducibleDays = difference > 0
+    ? Math.min(Math.floor(difference / fullDayNet), Math.max(0, rows.length - 1))
+    : 0;
+  return {
+    totalNet,
+    shortage,
+    difference,
+    fullDayNet,
+    additionalDays,
+    projectedTotal: totalNet + additionalDays * fullDayNet,
+    projectedSurplus: difference + additionalDays * fullDayNet,
+    reducibleDays,
+    remainingTotal: totalNet - reducibleDays * fullDayNet,
+    status: difference < 0 ? 'shortfall' : difference > 0 ? 'surplus' : 'exact'
+  };
 }
 
 export function groupWeeklyDeliveries(rows) {

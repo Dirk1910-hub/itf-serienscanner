@@ -10,10 +10,10 @@
   <title>Produktionshelfer</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=11">
   <script defer src="vendor/zxing-browser.min.js"></script>
   <script defer src="vendor/xlsx.full.min.js"></script>
-  <script type="module" src="app.js?v=10"></script>
+  <script type="module" src="app.js?v=11"></script>
 </head>
 <body>
   <audio id="success-sound" preload="auto" playsinline src="scan-erfolgreich.wav"></audio>
@@ -129,6 +129,9 @@
           <div><label for="material">Werkstoff</label><select id="material" name="material" required><option value="TitanCerm">TitanCerm</option><option value="Vilboplus">Vilboplus</option></select></div>
         </div>
 
+        <label for="shortage">Fehlmenge <span>optional, nur Zahlen mit maximal 6 Stellen</span></label>
+        <input id="shortage" name="shortage" type="text" inputmode="numeric" pattern="[0-9]{1,6}" autocomplete="off" placeholder="z. B. 2500">
+
         <div class="form-grid two">
           <div><label for="start-date">Startdatum Einguss</label><input id="start-date" name="startDate" type="date" required></div>
           <div><label for="end-date">Enddatum Einguss</label><input id="end-date" name="endDate" type="date" required></div>
@@ -155,6 +158,10 @@
             <thead><tr><th>KW</th><th>Freitag</th><th>Netto</th></tr></thead>
             <tbody id="delivery-table-body"></tbody>
           </table>
+        </div>
+        <div class="coverage-summary">
+          <p>Komplette Summe Lagereingang <strong id="delivery-total"></strong></p>
+          <p id="coverage-status" class="coverage-status" role="status" aria-live="polite"></p>
         </div>
         <div class="result-actions">
           <button id="export-excel" class="primary" type="button">Excel-Datei teilen</button>

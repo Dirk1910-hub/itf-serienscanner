@@ -1,4 +1,4 @@
-const CACHE = 'produktionshelfer-v10';
+const CACHE = 'produktionshelfer-v11';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './scanner-state.js', './frame-decoder.js', './audio-feedback.js', './camera-orientation.js', './delivery-plan.js', './scan-erfolgreich.wav', './scan-doppelt.wav', './manifest.webmanifest', './icon-192.png', './icon-512.png', './vendor/zxing-browser.min.js', './vendor/xlsx.full.min.js'];
 self.addEventListener('install', (event) => {
   self.skipWaiting();

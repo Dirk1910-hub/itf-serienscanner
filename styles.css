@@ -112,6 +112,12 @@ h2 { margin-bottom: 0; font-size: 20px; }
 .result-meta { margin: -3px 0 13px; padding: 10px 12px; border-radius: 11px; background: #f0f7f5; color: var(--ink); font-size: 13px; font-weight: 700; line-height: 1.5; }
 .model-badge { padding: 7px 9px; border-radius: 9px; background: var(--teal-soft); color: var(--teal); font-size: 13px; letter-spacing: .5px; }
 .table-wrap { overflow-x: auto; border: 1px solid #d5e0de; border-radius: 13px; }
+.coverage-summary { margin-top: 14px; padding: 14px; border: 1px solid #c9dbd7; border-radius: 13px; background: #f7fbfa; }
+.coverage-summary > p:first-child { display: flex; justify-content: space-between; gap: 12px; margin: 0; color: var(--ink); font-size: 15px; font-weight: 800; }
+.coverage-summary strong { color: var(--teal); white-space: nowrap; }
+.coverage-status { margin: 11px 0 0; padding-top: 11px; border-top: 1px solid #dbe7e4; color: var(--muted); font-size: 14px; font-weight: 700; line-height: 1.5; }
+.coverage-status.shortfall { color: var(--danger); }
+.coverage-status.surplus, .coverage-status.exact { color: #197149; }
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 th, td { padding: 12px 10px; border-bottom: 1px solid #e2e9e7; text-align: left; white-space: nowrap; }
 th { background: #f0f7f5; color: var(--muted); font-size: 12px; letter-spacing: .5px; text-transform: uppercase; }
