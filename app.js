@@ -2,6 +2,7 @@ import { addScan, createTextFileContent, isValidManualCode, isValidScannedCode }
 import { decodeFrameCandidates } from './frame-decoder.js';
 import { playSound, unlockSound } from './audio-feedback.js';
 import { cameraCounterTransform, requestPortraitLock } from './camera-orientation.js';
+import { calculateDailyDeliveries, groupWeeklyDeliveries, validateDeliveryInput } from './delivery-plan.js';
 
 const EMAIL = 'thinnes13@freenet.de';
 const STORAGE_KEY = 'itf-scanner-scans-v1';
@@ -14,6 +15,14 @@ const elements = {
   manualOpen: $('#manual-open'), manualPanel: $('#manual-panel'), manualForm: $('#manual-form'), manualCode: $('#manual-code'),
   manualCancel: $('#manual-cancel'), manualError: $('#manual-error'), manualCount: $('#manual-count'),
   successSound: $('#success-sound'), duplicateSound: $('#duplicate-sound')
+};
+
+const deliveryElements = {
+  startScreen: $('#start-screen'), scannerScreen: $('#scanner-screen'), deliveryScreen: $('#delivery-screen'),
+  openScanner: $('#open-scanner'), openDelivery: $('#open-delivery'), form: $('#delivery-form'),
+  errors: $('#delivery-errors'), results: $('#delivery-results'), model: $('#result-model'),
+  tableBody: $('#delivery-table-body'), share: $('#export-excel'), download: $('#download-excel'),
+  reset: $('#reset-delivery'), shareStatus: $('#delivery-share-status'), modelInput: $('#modelmaster')
 };
 
 let scans = loadScans();
@@ -31,6 +40,7 @@ const rotatedVerticalCropCanvas = document.createElement('canvas');
 let audioContext = null;
 let blockedCode = null;
 let lastDecodeAt = 0;
+let currentDelivery = null;
 
 function loadScans() {
   try {
@@ -309,6 +319,159 @@ function submitManualCode(event) {
   }
   closeManualPanel();
 }
+
+function formatGermanDate(isoDate) {
+  const [year, month, day] = isoDate.split('-');
+  return `${day}.${month}.${year}`;
+}
+
+function showScreen(screen) {
+  for (const item of [deliveryElements.startScreen, deliveryElements.scannerScreen, deliveryElements.deliveryScreen]) {
+    item.classList.toggle('hidden', item !== screen);
+  }
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
+function readDeliveryInput() {
+  const data = new FormData(deliveryElements.form);
+  return {
+    modelmaster: String(data.get('modelmaster') || '').toUpperCase(),
+    startDate: String(data.get('startDate') || ''),
+    endDate: String(data.get('endDate') || ''),
+    grossPerDay: Number(data.get('grossPerDay')),
+    leadTimeDays: Number(data.get('leadTimeDays')),
+    yieldPercent: Number(data.get('yieldPercent'))
+  };
+}
+
+function showDeliveryErrors(errors) {
+  deliveryElements.errors.replaceChildren();
+  if (!errors.length) {
+    deliveryElements.errors.classList.add('hidden');
+    return;
+  }
+  const list = document.createElement('ul');
+  for (const error of errors) {
+    const item = document.createElement('li');
+    item.textContent = error;
+    list.append(item);
+  }
+  deliveryElements.errors.append(list);
+  deliveryElements.errors.classList.remove('hidden');
+}
+
+function renderDeliveryResults(plan) {
+  deliveryElements.model.textContent = plan.input.modelmaster;
+  deliveryElements.tableBody.replaceChildren();
+  for (const row of plan.weekly) {
+    const tableRow = document.createElement('tr');
+    for (const value of [`KW ${row.calendarWeek}`, formatGermanDate(row.fridayDate), row.netTotal.toLocaleString('de-DE')]) {
+      const cell = document.createElement('td');
+      cell.textContent = value;
+      tableRow.append(cell);
+    }
+    deliveryElements.tableBody.append(tableRow);
+  }
+  deliveryElements.results.classList.remove('hidden');
+  deliveryElements.shareStatus.innerHTML = `Beim Teilen kannst du „Mail“ auswählen. Empfänger: <span class="email">${EMAIL}</span>`;
+  deliveryElements.results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function makeDeliveryExcelFile() {
+  if (!currentDelivery || !window.XLSX) return null;
+  const { input, daily, weekly } = currentDelivery;
+  const summaryRows = [
+    ['Lieferplan', input.modelmaster],
+    ['Startdatum Einguss', formatGermanDate(input.startDate)],
+    ['Enddatum Einguss', formatGermanDate(input.endDate)],
+    ['Brutto pro Tag', input.grossPerDay],
+    ['Durchlaufzeit in Tagen', input.leadTimeDays],
+    ['Yield in %', input.yieldPercent],
+    [],
+    ['Modelmaster', 'Kalenderwoche', 'Freitag', 'Netto-Lagereingang'],
+    ...weekly.map((row) => [row.modelmaster, row.calendarWeek, formatGermanDate(row.fridayDate), row.netTotal])
+  ];
+  const detailRows = [
+    ['Modelmaster', 'Eingussdatum', 'Brutto', 'Netto', 'Lagereingang'],
+    ...daily.map((row) => [row.modelmaster, formatGermanDate(row.castingDate), row.gross, row.net, formatGermanDate(row.warehouseDate)])
+  ];
+  const workbook = XLSX.utils.book_new();
+  const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
+  const detailSheet = XLSX.utils.aoa_to_sheet(detailRows);
+  summarySheet['!cols'] = [{ wch: 24 }, { wch: 17 }, { wch: 15 }, { wch: 22 }];
+  detailSheet['!cols'] = [{ wch: 16 }, { wch: 16 }, { wch: 13 }, { wch: 13 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(workbook, summarySheet, 'Wochenplan');
+  XLSX.utils.book_append_sheet(workbook, detailSheet, 'Tageswerte');
+  const bytes = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+  return new File([bytes], `Lieferplan-${input.modelmaster}.xlsx`, {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+}
+
+function downloadDeliveryExcel() {
+  const file = makeDeliveryExcelFile();
+  if (!file) return;
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(file);
+  link.download = file.name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  deliveryElements.shareStatus.textContent = 'Excel-Datei wurde heruntergeladen.';
+}
+
+async function shareDeliveryExcel() {
+  const file = makeDeliveryExcelFile();
+  if (!file) return;
+  try { await navigator.clipboard?.writeText(EMAIL); } catch { /* Teilen funktioniert auch ohne Zwischenablage. */ }
+  if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+    try {
+      await navigator.share({ title: `Lieferplan ${currentDelivery.input.modelmaster}`, text: `Bitte an ${EMAIL} senden.`, files: [file] });
+      deliveryElements.shareStatus.textContent = 'Excel-Datei wurde zum Teilen übergeben.';
+      return;
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+    }
+  }
+  downloadDeliveryExcel();
+  deliveryElements.shareStatus.textContent = `Excel-Datei gespeichert. Bitte per E-Mail an ${EMAIL} senden.`;
+}
+
+function resetDeliveryPlan(ask = true) {
+  if (ask && !confirm('Lieferplan und alle Eingaben wirklich zurücksetzen?')) return;
+  deliveryElements.form.reset();
+  currentDelivery = null;
+  showDeliveryErrors([]);
+  deliveryElements.tableBody.replaceChildren();
+  deliveryElements.results.classList.add('hidden');
+  deliveryElements.model.textContent = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+deliveryElements.openScanner.addEventListener('click', () => showScreen(deliveryElements.scannerScreen));
+deliveryElements.openDelivery.addEventListener('click', () => showScreen(deliveryElements.deliveryScreen));
+document.querySelectorAll('[data-back-home]').forEach((button) => button.addEventListener('click', () => {
+  if (scannerActive) stopScanner();
+  showScreen(deliveryElements.startScreen);
+}));
+deliveryElements.modelInput.addEventListener('input', () => {
+  deliveryElements.modelInput.value = deliveryElements.modelInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
+});
+deliveryElements.form.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const input = readDeliveryInput();
+  const errors = validateDeliveryInput(input);
+  showDeliveryErrors(errors);
+  if (errors.length) {
+    deliveryElements.results.classList.add('hidden');
+    return;
+  }
+  const daily = calculateDailyDeliveries(input);
+  currentDelivery = { input, daily, weekly: groupWeeklyDeliveries(daily) };
+  renderDeliveryResults(currentDelivery);
+});
+deliveryElements.share.addEventListener('click', shareDeliveryExcel);
+deliveryElements.download.addEventListener('click', downloadDeliveryExcel);
+deliveryElements.reset.addEventListener('click', () => resetDeliveryPlan(true));
 
 elements.start.addEventListener('click', startScanner);
 elements.stop.addEventListener('click', stopScanner);

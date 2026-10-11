@@ -6,89 +6,152 @@
   <meta name="theme-color" content="#0f766e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="ITF Scanner">
-  <title>ITF Serienscanner</title>
+  <meta name="apple-mobile-web-app-title" content="Produktionshelfer">
+  <title>Produktionshelfer</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="styles.css">
   <script defer src="vendor/zxing-browser.min.js"></script>
+  <script defer src="vendor/xlsx.full.min.js"></script>
   <script type="module" src="app.js"></script>
 </head>
 <body>
   <audio id="success-sound" preload="auto" playsinline src="scan-erfolgreich.wav"></audio>
   <audio id="duplicate-sound" preload="auto" playsinline src="scan-doppelt.wav"></audio>
   <main class="app-shell">
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">SERIENERFASSUNG</p>
-        <h1>ITF Scanner</h1>
+    <section id="start-screen" class="screen" aria-labelledby="start-title">
+      <header class="welcome-header">
+        <p class="eyebrow">PRODUKTIONSHELFER</p>
+        <h1 id="start-title">Was möchtest du tun?</h1>
+        <p>Wähle eine Funktion aus.</p>
+      </header>
+      <div class="menu-grid">
+        <button id="open-scanner" class="menu-card" type="button">
+          <span class="menu-icon" aria-hidden="true">▥</span>
+          <span><strong>Ident scannen</strong><small>ITF-Barcodes erfassen und als Liste weitergeben</small></span>
+          <span class="menu-arrow" aria-hidden="true">›</span>
+        </button>
+        <button id="open-delivery" class="menu-card" type="button">
+          <span class="menu-icon delivery-icon" aria-hidden="true">▦</span>
+          <span><strong>Lieferplan</strong><small>Netto-Lagereingänge nach Kalenderwoche berechnen</small></span>
+          <span class="menu-arrow" aria-hidden="true">›</span>
+        </button>
       </div>
-      <div class="counter" aria-live="polite"><strong id="count">0</strong><span>Scans</span></div>
-    </header>
-
-    <section class="camera-card" aria-label="Scanner">
-      <video id="preview" playsinline muted></video>
-      <div class="scan-guide" aria-hidden="true"><span></span></div>
-      <div id="camera-placeholder" class="camera-placeholder">
-        <div class="toilet-illustration" role="img" aria-label="Gezeichnete Toilette">
-          <svg viewBox="0 0 120 100" aria-hidden="true">
-            <path d="M20 8h39v38H20z M17 8h45" />
-            <circle cx="51" cy="17" r="2.5" class="toilet-accent" />
-            <path d="M56 43h44c0 19-11 31-31 31H55c-10 0-17-7-17-17v-5h18z" />
-            <path d="M63 74v11h27l5 8H48l5-19 M35 47h62" />
-            <path d="M27 25v12 M34 25v12 M41 25v12" class="toilet-barcode" />
-          </svg>
-        </div>
-        <p>Kamera starten. Die Bildausrichtung bleibt beim Drehen fixiert.</p>
-      </div>
-      <button id="start-scan" class="primary camera-action" type="button">Kamera starten</button>
-      <button id="stop-scan" class="secondary camera-action hidden" type="button">Kamera stoppen</button>
     </section>
 
-    <div id="status" class="status neutral" role="status" aria-live="assertive">Bereit zum Scannen</div>
-
-    <button id="manual-open" class="secondary manual-open" type="button">Manuell eingeben</button>
-    <section id="manual-panel" class="manual-panel hidden" aria-labelledby="manual-title">
-      <form id="manual-form" novalidate>
-        <div class="manual-heading">
-          <div>
-            <p class="eyebrow">ERSATZEINGABE</p>
-            <h2 id="manual-title">Nummer manuell eingeben</h2>
-          </div>
-          <span id="manual-count" aria-live="polite">0/10</span>
-        </div>
-        <label for="manual-code">Genau 10 Ziffern</label>
-        <input id="manual-code" name="manual-code" type="text" inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10" autocomplete="off" enterkeyhint="done" placeholder="0000000000">
-        <p id="manual-error" class="manual-error hidden" role="alert">Bitte genau 10 Ziffern eingeben.</p>
-        <div class="manual-actions">
-          <button id="manual-cancel" class="secondary" type="button">Abbrechen</button>
-          <button class="primary" type="submit">Nummer übernehmen</button>
-        </div>
-      </form>
-    </section>
-
-    <section class="list-card">
-      <div class="section-heading">
+    <section id="scanner-screen" class="screen hidden" aria-labelledby="scanner-title">
+      <button class="back-button" data-back-home type="button">‹ Startmenü</button>
+      <header class="topbar">
         <div>
-          <p class="eyebrow">TEXTLISTE</p>
-          <h2>Erfasste Nummern</h2>
+          <p class="eyebrow">IDENT SCANNEN</p>
+          <h1 id="scanner-title">ITF Scanner</h1>
         </div>
-        <button id="undo" class="text-button" type="button" disabled>Letzten löschen</button>
-      </div>
-      <textarea id="scan-list" readonly aria-label="Erfasste Barcode-Nummern" placeholder="Noch kein Barcode erfasst"></textarea>
+        <div class="counter" aria-live="polite"><strong id="count">0</strong><span>Scans</span></div>
+      </header>
+
+      <section class="camera-card" aria-label="Scanner">
+        <video id="preview" playsinline muted></video>
+        <div class="scan-guide" aria-hidden="true"><span></span></div>
+        <div id="camera-placeholder" class="camera-placeholder">
+          <div class="toilet-illustration" role="img" aria-label="Gezeichnete Toilette">
+            <svg viewBox="0 0 120 100" aria-hidden="true">
+              <path d="M20 8h39v38H20z M17 8h45" />
+              <circle cx="51" cy="17" r="2.5" class="toilet-accent" />
+              <path d="M56 43h44c0 19-11 31-31 31H55c-10 0-17-7-17-17v-5h18z" />
+              <path d="M63 74v11h27l5 8H48l5-19 M35 47h62" />
+              <path d="M27 25v12 M34 25v12 M41 25v12" class="toilet-barcode" />
+            </svg>
+          </div>
+          <p>Kamera starten. Die Bildausrichtung bleibt beim Drehen fixiert.</p>
+        </div>
+        <button id="start-scan" class="primary camera-action" type="button">Kamera starten</button>
+        <button id="stop-scan" class="secondary camera-action hidden" type="button">Kamera stoppen</button>
+      </section>
+
+      <div id="status" class="status neutral" role="status" aria-live="assertive">Bereit zum Scannen</div>
+      <button id="manual-open" class="secondary manual-open" type="button">Manuell eingeben</button>
+      <section id="manual-panel" class="manual-panel hidden" aria-labelledby="manual-title">
+        <form id="manual-form" novalidate>
+          <div class="manual-heading">
+            <div><p class="eyebrow">ERSATZEINGABE</p><h2 id="manual-title">Nummer manuell eingeben</h2></div>
+            <span id="manual-count" aria-live="polite">0/10</span>
+          </div>
+          <label for="manual-code">Genau 10 Ziffern</label>
+          <input id="manual-code" name="manual-code" type="text" inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10" autocomplete="off" enterkeyhint="done" placeholder="0000000000">
+          <p id="manual-error" class="manual-error hidden" role="alert">Bitte genau 10 Ziffern eingeben.</p>
+          <div class="manual-actions">
+            <button id="manual-cancel" class="secondary" type="button">Abbrechen</button>
+            <button class="primary" type="submit">Nummer übernehmen</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="list-card">
+        <div class="section-heading">
+          <div><p class="eyebrow">TEXTLISTE</p><h2>Erfasste Nummern</h2></div>
+          <button id="undo" class="text-button" type="button" disabled>Letzten löschen</button>
+        </div>
+        <textarea id="scan-list" readonly aria-label="Erfasste Barcode-Nummern" placeholder="Noch kein Barcode erfasst"></textarea>
+      </section>
+      <button id="finish" class="finish" type="button" disabled>Alles erfasst</button>
+      <button id="reset" class="reset-button" type="button" disabled>Liste vollständig löschen</button>
+
+      <section id="finish-panel" class="finish-panel hidden" aria-labelledby="finish-title">
+        <p class="done-mark" aria-hidden="true">✓</p>
+        <h2 id="finish-title">Erfassung abgeschlossen</h2>
+        <p><strong id="finish-count">0</strong> Nummern sind bereit. Empfänger: <span class="email">thinnes13@freenet.de</span></p>
+        <button id="email" class="primary" type="button">E-Mail mit Liste öffnen</button>
+        <button id="share-file" class="secondary" type="button">TXT-Datei teilen</button>
+        <button id="continue" class="text-button wide" type="button">Weitere Nummern scannen</button>
+        <p class="hint">Beim Teilen wird die E-Mail-Adresse kopiert. In „Mail“ kannst du sie direkt einsetzen.</p>
+      </section>
     </section>
 
-    <button id="finish" class="finish" type="button" disabled>Alles erfasst</button>
-    <button id="reset" class="reset-button" type="button" disabled>Liste vollständig löschen</button>
+    <section id="delivery-screen" class="screen hidden" aria-labelledby="delivery-title">
+      <button class="back-button" data-back-home type="button">‹ Startmenü</button>
+      <header class="page-header">
+        <p class="eyebrow">LIEFERPLAN</p>
+        <h1 id="delivery-title">Lagereingang berechnen</h1>
+        <p>Der erste Eingusstag wird mit 60 % der Brutto-Tagesmenge gerechnet.</p>
+      </header>
 
-    <section id="finish-panel" class="finish-panel hidden" aria-labelledby="finish-title">
-      <p class="done-mark" aria-hidden="true">✓</p>
-      <h2 id="finish-title">Erfassung abgeschlossen</h2>
-      <p><strong id="finish-count">0</strong> Nummern sind bereit. Empfänger: <span class="email">thinnes13@freenet.de</span></p>
-      <button id="email" class="primary" type="button">E-Mail mit Liste öffnen</button>
-      <button id="share-file" class="secondary" type="button">TXT-Datei teilen</button>
-      <button id="continue" class="text-button wide" type="button">Weitere Nummern scannen</button>
-      <p class="hint">Beim Teilen wird die E-Mail-Adresse kopiert. In „Mail“ kannst du sie direkt einsetzen.</p>
+      <form id="delivery-form" class="form-card" novalidate>
+        <label for="modelmaster">Modelmaster <span>7-stellig, Buchstaben und Ziffern</span></label>
+        <input id="modelmaster" name="modelmaster" type="text" maxlength="7" pattern="[A-Za-z0-9]{7}" autocapitalize="characters" autocomplete="off" placeholder="A1B2C3D" required>
+
+        <div class="form-grid two">
+          <div><label for="start-date">Startdatum Einguss</label><input id="start-date" name="startDate" type="date" required></div>
+          <div><label for="end-date">Enddatum Einguss</label><input id="end-date" name="endDate" type="date" required></div>
+        </div>
+        <div class="form-grid two">
+          <div><label for="gross-day">Brutto pro Tag</label><input id="gross-day" name="grossPerDay" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="100" required></div>
+          <div><label for="lead-time">Durchlaufzeit in Tagen</label><input id="lead-time" name="leadTimeDays" type="number" inputmode="numeric" min="0" step="1" placeholder="7" required></div>
+        </div>
+        <label for="yield-percent">Yield in %</label>
+        <input id="yield-percent" name="yieldPercent" type="number" inputmode="decimal" min="0.01" max="100" step="0.01" placeholder="80" required>
+        <div id="delivery-errors" class="form-errors hidden" role="alert"></div>
+        <button class="primary form-submit" type="submit">Lieferplan berechnen</button>
+      </form>
+
+      <section id="delivery-results" class="results-card hidden" aria-labelledby="results-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">ERGEBNIS</p><h2 id="results-title">Wöchentlicher Lagereingang</h2></div>
+          <strong id="result-model" class="model-badge"></strong>
+        </div>
+        <p class="result-note">Zusammenfassung jeweils Samstag bis Freitag. Ausgabe am Freitag.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>KW</th><th>Freitag</th><th>Netto</th></tr></thead>
+            <tbody id="delivery-table-body"></tbody>
+          </table>
+        </div>
+        <div class="result-actions">
+          <button id="export-excel" class="primary" type="button">Excel-Datei teilen</button>
+          <button id="download-excel" class="secondary" type="button">Excel herunterladen</button>
+        </div>
+        <p id="delivery-share-status" class="hint" role="status" aria-live="polite">Beim Teilen kannst du „Mail“ auswählen. Empfänger: <span class="email">thinnes13@freenet.de</span></p>
+      </section>
+      <button id="reset-delivery" class="reset-button delivery-reset" type="button">Lieferplan zurücksetzen</button>
     </section>
   </main>
 </body>

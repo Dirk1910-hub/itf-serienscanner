@@ -1,7 +1,7 @@
 {
-  "name": "ITF Serienscanner",
-  "short_name": "ITF Scanner",
-  "description": "Mehrere ITF-Barcodes erfassen und als Textliste weitergeben.",
+  "name": "Produktionshelfer",
+  "short_name": "Produktion",
+  "description": "ITF-Identnummern scannen und wöchentliche Lieferpläne berechnen.",
   "lang": "de",
   "start_url": "./",
   "scope": "./",
