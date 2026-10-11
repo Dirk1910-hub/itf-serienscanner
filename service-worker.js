@@ -1,4 +1,4 @@
-const CACHE = 'produktionshelfer-v8';
+const CACHE = 'produktionshelfer-v9';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './scanner-state.js', './frame-decoder.js', './audio-feedback.js', './camera-orientation.js', './delivery-plan.js', './scan-erfolgreich.wav', './scan-doppelt.wav', './manifest.webmanifest', './icon-192.png', './icon-512.png', './vendor/zxing-browser.min.js', './vendor/xlsx.full.min.js'];
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -19,6 +19,16 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => caches.match('./index.html')));
+    return;
+  }
+  if (event.request.destination === 'script' || event.request.destination === 'style') {
+    event.respondWith(fetch(event.request)
+      .then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request, { ignoreSearch: true })));
     return;
   }
   event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
