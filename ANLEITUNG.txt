@@ -15,6 +15,7 @@ Funktionen
 - Rechnet den ersten Eingusstag mit 60 % der Brutto-Tagesmenge und rundet das Tages-Netto.
 - Fasst Lagereingänge von Samstag bis Freitag mit Kalenderwoche und Freitagsdatum zusammen.
 - Nimmt optional eine rein numerische Fehlmenge mit maximal 6 Stellen auf.
+- Teilkonti kann ein- oder ausgeschaltet werden. Bei Teilkonti ein findet samstags und sonntags keine Produktion statt; die Durchlaufzeit bleibt in Kalendertagen.
 - Zeigt die komplette Lagereingangssumme und prüft, ob sie die Fehlmenge abdeckt.
 - Empfiehlt bei Unterdeckung die mindestens zusätzlich nötigen Produktionstage und bei Überdeckung die maximal einsparbaren vollen Produktionstage.
 - Erstellt eine Excel-Datei mit Wochenplan und Tageswerten zum Teilen per E-Mail.

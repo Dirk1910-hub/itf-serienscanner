@@ -101,6 +101,12 @@ h2 { margin-bottom: 0; font-size: 20px; }
 .form-card label span { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; font-weight: 500; }
 .form-card input, .form-card select { width: 100%; min-height: 52px; margin: 0 0 16px; border: 2px solid #c7d8d5; border-radius: 13px; padding: 10px 12px; background: #f9fbfa; color: var(--ink); font: 700 17px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .form-card input:focus, .form-card select:focus { outline: 3px solid rgba(15,118,110,.18); border-color: var(--teal); }
+.form-card .option-check { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 11px; min-height: 58px; margin: 0 0 16px; padding: 10px 12px; border: 2px solid #c7d8d5; border-radius: 13px; background: #f9fbfa; cursor: pointer; }
+.form-card .option-check input { width: 24px; height: 24px; min-height: 0; margin: 0; accent-color: var(--teal); }
+.form-card .option-check .option-copy { margin: 0; color: var(--ink); font-size: 14px; font-weight: 800; }
+.form-card .option-check .option-copy small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; font-weight: 500; }
+.form-card .option-check .toggle-state { margin: 0; padding: 5px 9px; border-radius: 999px; background: #e7eeec; color: var(--muted); font-size: 12px; font-weight: 900; }
+.form-card .option-check input:checked ~ .toggle-state { background: var(--teal-soft); color: var(--teal); }
 #modelmaster, #press { text-transform: uppercase; letter-spacing: 1.5px; }
 .form-grid { display: grid; gap: 10px; }
 .form-grid.two { grid-template-columns: 1fr 1fr; }

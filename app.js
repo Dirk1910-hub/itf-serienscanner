@@ -23,7 +23,8 @@ const deliveryElements = {
   errors: $('#delivery-errors'), results: $('#delivery-results'), model: $('#result-model'), meta: $('#result-meta'),
   tableBody: $('#delivery-table-body'), share: $('#export-excel'), download: $('#download-excel'),
   reset: $('#reset-delivery'), shareStatus: $('#delivery-share-status'), modelInput: $('#modelmaster'), pressInput: $('#press'),
-  shortageInput: $('#shortage'), total: $('#delivery-total'), coverageStatus: $('#coverage-status')
+  shortageInput: $('#shortage'), partKontiInput: $('#part-konti'), partKontiState: $('#part-konti-state'),
+  total: $('#delivery-total'), coverageStatus: $('#coverage-status')
 };
 
 let scans = loadScans();
@@ -342,6 +343,7 @@ function readDeliveryInput() {
     press: String(data.get('press') || '').toUpperCase(),
     material: String(data.get('material') || ''),
     shortage: shortageValue === '' ? null : Number(shortageValue),
+    partKonti: data.has('partKonti'),
     startDate: String(data.get('startDate') || ''),
     endDate: String(data.get('endDate') || ''),
     grossPerDay: Number(data.get('grossPerDay')),
@@ -355,7 +357,7 @@ function coverageMessage(coverage) {
   if (coverage.status === 'not-provided') return 'Keine Fehlmenge angegeben – es wird nur die Gesamtsumme ausgewiesen.';
   if (coverage.status === 'exact') return 'Fehlmenge exakt abgedeckt. Es sind weder zusätzliche noch weniger Produktionstage erforderlich.';
   if (coverage.status === 'shortfall') {
-    return `Nicht abgedeckt: Es fehlen ${number(-coverage.difference)} Teile. Mindestens ${coverage.additionalDays} zusätzliche${coverage.additionalDays === 1 ? 'r Produktionstag' : ' Produktionstage'} mit zusammen ${number(coverage.additionalDays * coverage.fullDayNet)} Teilen ${coverage.additionalDays === 1 ? 'ist' : 'sind'} nötig. Danach beträgt der Lagereingang ${number(coverage.projectedTotal)} Teile und übersteigt die Fehlmenge um ${number(coverage.projectedSurplus)} Teile.`;
+    return `Nicht abgedeckt: Es fehlen ${number(-coverage.difference)} Teile. Mindestens ${coverage.additionalDays} zusätzliche${coverage.additionalDays === 1 ? 'r Produktionstag' : ' Produktionstage'} mit zusammen ${number(coverage.projectedTotal - coverage.totalNet)} Teilen ${coverage.additionalDays === 1 ? 'ist' : 'sind'} nötig. Danach beträgt der Lagereingang ${number(coverage.projectedTotal)} Teile und übersteigt die Fehlmenge um ${number(coverage.projectedSurplus)} Teile.`;
   }
   const reduction = coverage.reducibleDays > 0
     ? `Der Plan kann um bis zu ${coverage.reducibleDays} volle${coverage.reducibleDays === 1 ? 'n Produktionstag' : ' Produktionstage'} verkürzt werden. Danach verbleiben ${number(coverage.remainingTotal)} Teile Lagereingang.`
@@ -381,7 +383,7 @@ function showDeliveryErrors(errors) {
 
 function renderDeliveryResults(plan) {
   deliveryElements.model.textContent = plan.input.modelmaster;
-  deliveryElements.meta.textContent = `${plan.input.designation} · Presse ${plan.input.press} · ${plan.input.material}`;
+  deliveryElements.meta.textContent = `${plan.input.designation} · Presse ${plan.input.press} · ${plan.input.material} · Teilkonti ${plan.input.partKonti ? 'ein' : 'aus'}`;
   deliveryElements.tableBody.replaceChildren();
   for (const row of plan.weekly) {
     const tableRow = document.createElement('tr');
@@ -408,6 +410,7 @@ function makeDeliveryExcelFile() {
     ['Bezeichnung', input.designation],
     ['Presse', input.press],
     ['Werkstoff', input.material],
+    ['Teilkonti', input.partKonti ? 'Ein – Samstag/Sonntag keine Produktion' : 'Aus – Produktion an allen Kalendertagen'],
     ['Startdatum Einguss', formatGermanDate(input.startDate)],
     ['Enddatum Einguss', formatGermanDate(input.endDate)],
     ['Brutto pro Tag', input.grossPerDay],
@@ -476,6 +479,7 @@ function resetDeliveryPlan(ask = true) {
   deliveryElements.meta.textContent = '';
   deliveryElements.total.textContent = '';
   deliveryElements.coverageStatus.textContent = '';
+  deliveryElements.partKontiState.textContent = 'Aus';
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -494,6 +498,9 @@ deliveryElements.pressInput.addEventListener('input', () => {
 deliveryElements.shortageInput.addEventListener('input', () => {
   const digits = deliveryElements.shortageInput.value.replace(/\D/g, '').slice(0, 6);
   if (deliveryElements.shortageInput.value !== digits) deliveryElements.shortageInput.value = digits;
+});
+deliveryElements.partKontiInput.addEventListener('change', () => {
+  deliveryElements.partKontiState.textContent = deliveryElements.partKontiInput.checked ? 'Ein' : 'Aus';
 });
 deliveryElements.form.addEventListener('submit', (event) => {
   event.preventDefault();

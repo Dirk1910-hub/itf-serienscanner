@@ -10,10 +10,10 @@
   <title>Produktionshelfer</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=11">
+  <link rel="stylesheet" href="styles.css?v=12">
   <script defer src="vendor/zxing-browser.min.js"></script>
   <script defer src="vendor/xlsx.full.min.js"></script>
-  <script type="module" src="app.js?v=11"></script>
+  <script type="module" src="app.js?v=12"></script>
 </head>
 <body>
   <audio id="success-sound" preload="auto" playsinline src="scan-erfolgreich.wav"></audio>
@@ -131,6 +131,12 @@
 
         <label for="shortage">Fehlmenge <span>optional, nur Zahlen mit maximal 6 Stellen</span></label>
         <input id="shortage" name="shortage" type="text" inputmode="numeric" pattern="[0-9]{1,6}" autocomplete="off" placeholder="z. B. 2500">
+
+        <label class="option-check" for="part-konti">
+          <input id="part-konti" name="partKonti" type="checkbox">
+          <span class="option-copy"><strong>Teilkonti</strong><small>Ein: Samstag und Sonntag keine Produktion</small></span>
+          <span id="part-konti-state" class="toggle-state">Aus</span>
+        </label>
 
         <div class="form-grid two">
           <div><label for="start-date">Startdatum Einguss</label><input id="start-date" name="startDate" type="date" required></div>

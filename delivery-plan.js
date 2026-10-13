@@ -60,9 +60,13 @@ export function calculateDailyDeliveries(input) {
   const rows = [];
   const start = parseIsoDate(input.startDate);
   const end = parseIsoDate(input.endDate);
-  for (let time = start.getTime(), index = 0; time <= end.getTime(); time += DAY_MS, index += 1) {
-    const castingDate = formatIsoDate(new Date(time));
-    const gross = index === 0 ? Number((Number(input.grossPerDay) * 0.6).toFixed(6)) : Number(input.grossPerDay);
+  let productionIndex = 0;
+  for (let time = start.getTime(); time <= end.getTime(); time += DAY_MS) {
+    const productionDate = new Date(time);
+    const weekday = productionDate.getUTCDay();
+    if (input.partKonti && (weekday === 0 || weekday === 6)) continue;
+    const castingDate = formatIsoDate(productionDate);
+    const gross = productionIndex === 0 ? Number((Number(input.grossPerDay) * 0.6).toFixed(6)) : Number(input.grossPerDay);
     rows.push({
       modelmaster: input.modelmaster,
       castingDate,
@@ -70,6 +74,7 @@ export function calculateDailyDeliveries(input) {
       net: Math.round(gross * Number(input.yieldPercent) / 100),
       warehouseDate: addDays(castingDate, Number(input.leadTimeDays))
     });
+    productionIndex += 1;
   }
   return rows;
 }
@@ -96,7 +101,19 @@ export function assessCoverage(input, rows) {
 
   const shortage = Number(input.shortage);
   const difference = totalNet - shortage;
-  const additionalDays = difference < 0 ? Math.ceil(-difference / fullDayNet) : 0;
+  const firstDayNet = Math.round(Number(input.grossPerDay) * 0.6 * Number(input.yieldPercent) / 100);
+  let additionalDays = 0;
+  let additionalNet = 0;
+  if (difference < 0) {
+    const deficit = -difference;
+    if (rows.length === 0) {
+      additionalDays = deficit <= firstDayNet ? 1 : 1 + Math.ceil((deficit - firstDayNet) / fullDayNet);
+      additionalNet = firstDayNet + (additionalDays - 1) * fullDayNet;
+    } else {
+      additionalDays = Math.ceil(deficit / fullDayNet);
+      additionalNet = additionalDays * fullDayNet;
+    }
+  }
   const reducibleDays = difference > 0
     ? Math.min(Math.floor(difference / fullDayNet), Math.max(0, rows.length - 1))
     : 0;
@@ -106,8 +123,8 @@ export function assessCoverage(input, rows) {
     difference,
     fullDayNet,
     additionalDays,
-    projectedTotal: totalNet + additionalDays * fullDayNet,
-    projectedSurplus: difference + additionalDays * fullDayNet,
+    projectedTotal: totalNet + additionalNet,
+    projectedSurplus: difference + additionalNet,
     reducibleDays,
     remainingTotal: totalNet - reducibleDays * fullDayNet,
     status: difference < 0 ? 'shortfall' : difference > 0 ? 'surplus' : 'exact'
