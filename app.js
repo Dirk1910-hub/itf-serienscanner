@@ -1,8 +1,8 @@
-import { addScan, createTextFileContent, isValidManualCode, isValidScannedCode } from './scanner-state.js';
-import { decodeFrameCandidates } from './frame-decoder.js';
-import { playSound, unlockSound } from './audio-feedback.js';
-import { cameraCounterTransform, requestPortraitLock } from './camera-orientation.js';
-import { assessCoverage, calculateDailyDeliveries, groupWeeklyDeliveries, validateDeliveryInput } from './delivery-plan.js';
+import { addScan, createTextFileContent, isValidManualCode, isValidScannedCode } from './scanner-state.js?v=13';
+import { decodeFrameCandidates } from './frame-decoder.js?v=13';
+import { playSound, unlockSound } from './audio-feedback.js?v=13';
+import { cameraCounterTransform, requestPortraitLock } from './camera-orientation.js?v=13';
+import { assessCoverage, calculateDailyDeliveries, groupWeeklyDeliveries, inheritPlanSettings, validateDeliveryInput } from './delivery-plan.js?v=13';
 
 const EMAIL = 'thinnes13@freenet.de';
 const STORAGE_KEY = 'itf-scanner-scans-v1';
@@ -20,11 +20,9 @@ const elements = {
 const deliveryElements = {
   startScreen: $('#start-screen'), scannerScreen: $('#scanner-screen'), deliveryScreen: $('#delivery-screen'),
   openScanner: $('#open-scanner'), openDelivery: $('#open-delivery'), form: $('#delivery-form'),
-  errors: $('#delivery-errors'), results: $('#delivery-results'), model: $('#result-model'), meta: $('#result-meta'),
-  tableBody: $('#delivery-table-body'), share: $('#export-excel'), download: $('#download-excel'),
-  reset: $('#reset-delivery'), shareStatus: $('#delivery-share-status'), modelInput: $('#modelmaster'), pressInput: $('#press'),
-  shortageInput: $('#shortage'), partKontiInput: $('#part-konti'), partKontiState: $('#part-konti-state'),
-  total: $('#delivery-total'), coverageStatus: $('#coverage-status')
+  tabs: $('#plan-tabs'), panels: $('#delivery-plan-panels'), errors: $('#delivery-errors'),
+  results: $('#delivery-results'), resultList: $('#delivery-result-list'), share: $('#export-excel'), download: $('#download-excel'),
+  reset: $('#reset-delivery'), shareStatus: $('#delivery-share-status')
 };
 
 let scans = loadScans();
@@ -42,7 +40,7 @@ const rotatedVerticalCropCanvas = document.createElement('canvas');
 let audioContext = null;
 let blockedCode = null;
 let lastDecodeAt = 0;
-let currentDelivery = null;
+let currentDeliveries = [];
 
 function loadScans() {
   try {
@@ -334,23 +332,136 @@ function showScreen(screen) {
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
-function readDeliveryInput() {
-  const data = new FormData(deliveryElements.form);
-  const shortageValue = String(data.get('shortage') || '');
+const PLAN_SETTING_FIELDS = ['modelmaster', 'designation', 'press', 'material', 'shortage', 'partKonti', 'grossPerDay', 'leadTimeDays', 'yieldPercent'];
+
+function planPanelMarkup(number) {
+  const optionalControls = number === 1 ? '' : `
+    <div class="plan-options">
+      <label class="option-check" for="active-${number}">
+        <input id="active-${number}" data-role="active" type="checkbox">
+        <span class="option-copy"><strong>Lieferplan ${number} verwenden</strong><small>Aktivieren, um diesen Zeitraum mitzurechnen</small></span>
+        <span class="toggle-state" data-role="active-state">Aus</span>
+      </label>
+      <label class="option-check" for="inherit-${number}">
+        <input id="inherit-${number}" data-role="inherit" type="checkbox" disabled>
+        <span class="option-copy"><strong>Einstellungen aus Plan 1 übernehmen</strong><small>Alle Angaben außer Start- und Enddatum</small></span>
+        <span class="toggle-state" data-role="inherit-state">Aus</span>
+      </label>
+    </div>`;
+  return `
+    <section class="plan-panel${number === 1 ? '' : ' hidden'}" data-plan="${number}" role="tabpanel" aria-label="Lieferplan ${number}">
+      <div class="plan-panel-title"><span>Lieferplan ${number}</span><small>${number === 1 ? 'Pflichtplan' : 'optional'}</small></div>
+      ${optionalControls}
+      <div class="plan-fields">
+        <label for="modelmaster-${number}">Modelmaster <span>7-stellig, Buchstaben und Ziffern</span></label>
+        <input id="modelmaster-${number}" data-field="modelmaster" type="text" maxlength="7" autocapitalize="characters" autocomplete="off" placeholder="A1B2C3D">
+        <label for="designation-${number}">Bezeichnung <span>Name oder Kollektion des Artikels</span></label>
+        <input id="designation-${number}" data-field="designation" type="text" maxlength="60" autocomplete="off" placeholder="z. B. Nova 2026">
+        <div class="form-grid two">
+          <div><label for="press-${number}">Presse <span>4-stellig, alphanumerisch</span></label><input id="press-${number}" data-field="press" type="text" maxlength="4" autocapitalize="characters" autocomplete="off" placeholder="DG08"></div>
+          <div><label for="material-${number}">Werkstoff</label><select id="material-${number}" data-field="material"><option value="TitanCerm">TitanCerm</option><option value="Vilboplus">Vilboplus</option></select></div>
+        </div>
+        <label for="shortage-${number}">Fehlmenge <span>optional, nur Zahlen mit maximal 6 Stellen</span></label>
+        <input id="shortage-${number}" data-field="shortage" type="text" inputmode="numeric" autocomplete="off" placeholder="z. B. 2500">
+        <label class="option-check" for="part-konti-${number}">
+          <input id="part-konti-${number}" data-field="partKonti" type="checkbox">
+          <span class="option-copy"><strong>Teilkonti</strong><small>Ein: Samstag und Sonntag keine Produktion</small></span>
+          <span class="toggle-state" data-role="part-konti-state">Aus</span>
+        </label>
+        <div class="form-grid two">
+          <div><label for="start-date-${number}">Startdatum Einguss</label><input id="start-date-${number}" data-field="startDate" type="date"></div>
+          <div><label for="end-date-${number}">Enddatum Einguss</label><input id="end-date-${number}" data-field="endDate" type="date"></div>
+        </div>
+        <div class="form-grid two">
+          <div><label for="gross-day-${number}">Brutto pro Tag</label><input id="gross-day-${number}" data-field="grossPerDay" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="100"></div>
+          <div><label for="lead-time-${number}">Durchlaufzeit in Tagen</label><input id="lead-time-${number}" data-field="leadTimeDays" type="number" inputmode="numeric" min="0" step="1" placeholder="7"></div>
+        </div>
+        <label for="yield-percent-${number}">Yield in %</label>
+        <input id="yield-percent-${number}" data-field="yieldPercent" type="number" inputmode="decimal" min="0.01" max="100" step="0.01" placeholder="80">
+      </div>
+    </section>`;
+}
+
+function planPanel(number) {
+  return deliveryElements.panels.querySelector(`[data-plan="${number}"]`);
+}
+
+function planField(number, name) {
+  return planPanel(number).querySelector(`[data-field="${name}"]`);
+}
+
+function readPlanInput(number) {
+  const shortageValue = planField(number, 'shortage').value;
+  const activeInput = planPanel(number).querySelector('[data-role="active"]');
   return {
-    modelmaster: String(data.get('modelmaster') || '').toUpperCase(),
-    designation: String(data.get('designation') || '').trim(),
-    press: String(data.get('press') || '').toUpperCase(),
-    material: String(data.get('material') || ''),
+    active: number === 1 || Boolean(activeInput?.checked),
+    modelmaster: planField(number, 'modelmaster').value.toUpperCase(),
+    designation: planField(number, 'designation').value.trim(),
+    press: planField(number, 'press').value.toUpperCase(),
+    material: planField(number, 'material').value,
     shortage: shortageValue === '' ? null : Number(shortageValue),
-    partKonti: data.has('partKonti'),
-    startDate: String(data.get('startDate') || ''),
-    endDate: String(data.get('endDate') || ''),
-    grossPerDay: Number(data.get('grossPerDay')),
-    leadTimeDays: Number(data.get('leadTimeDays')),
-    yieldPercent: Number(data.get('yieldPercent'))
+    partKonti: planField(number, 'partKonti').checked,
+    startDate: planField(number, 'startDate').value,
+    endDate: planField(number, 'endDate').value,
+    grossPerDay: Number(planField(number, 'grossPerDay').value),
+    leadTimeDays: Number(planField(number, 'leadTimeDays').value),
+    yieldPercent: Number(planField(number, 'yieldPercent').value)
   };
 }
+
+function writePlanInput(number, input) {
+  for (const name of ['modelmaster', 'designation', 'press', 'material', 'startDate', 'endDate', 'grossPerDay', 'leadTimeDays', 'yieldPercent']) {
+    planField(number, name).value = input[name] ?? '';
+  }
+  planField(number, 'shortage').value = input.shortage ?? '';
+  planField(number, 'partKonti').checked = Boolean(input.partKonti);
+  const activeInput = planPanel(number).querySelector('[data-role="active"]');
+  if (activeInput) activeInput.checked = Boolean(input.active);
+  updatePartKontiState(number);
+}
+
+function updatePartKontiState(number) {
+  planPanel(number).querySelector('[data-role="part-konti-state"]').textContent = planField(number, 'partKonti').checked ? 'Ein' : 'Aus';
+}
+
+function syncInheritedPlan(number) {
+  writePlanInput(number, inheritPlanSettings(readPlanInput(1), readPlanInput(number)));
+}
+
+function updatePlanAvailability(number) {
+  if (number === 1) return;
+  const panel = planPanel(number);
+  const active = panel.querySelector('[data-role="active"]').checked;
+  const inheritInput = panel.querySelector('[data-role="inherit"]');
+  const inherited = active && inheritInput.checked;
+  panel.querySelector('[data-role="active-state"]').textContent = active ? 'Ein' : 'Aus';
+  panel.querySelector('[data-role="inherit-state"]').textContent = inherited ? 'Ein' : 'Aus';
+  inheritInput.disabled = !active;
+  for (const control of panel.querySelectorAll('.plan-fields input, .plan-fields select')) control.disabled = !active;
+  if (active && inherited) {
+    syncInheritedPlan(number);
+    for (const name of PLAN_SETTING_FIELDS) planField(number, name).disabled = true;
+  }
+  panel.classList.toggle('plan-disabled', !active);
+}
+
+function showPlanTab(number) {
+  for (const panel of deliveryElements.panels.querySelectorAll('.plan-panel')) panel.classList.toggle('hidden', Number(panel.dataset.plan) !== number);
+  for (const tab of deliveryElements.tabs.querySelectorAll('.plan-tab')) {
+    const selected = Number(tab.dataset.planTab) === number;
+    tab.classList.toggle('active', selected);
+    tab.setAttribute('aria-selected', String(selected));
+  }
+}
+
+function initializeDeliveryPlans() {
+  deliveryElements.panels.innerHTML = [1, 2, 3].map(planPanelMarkup).join('');
+  updatePlanAvailability(2);
+  updatePlanAvailability(3);
+  showPlanTab(1);
+}
+
+initializeDeliveryPlans();
 
 function coverageMessage(coverage) {
   const number = (value) => value.toLocaleString('de-DE');
@@ -381,63 +492,107 @@ function showDeliveryErrors(errors) {
   deliveryElements.errors.classList.remove('hidden');
 }
 
-function renderDeliveryResults(plan) {
-  deliveryElements.model.textContent = plan.input.modelmaster;
-  deliveryElements.meta.textContent = `${plan.input.designation} · Presse ${plan.input.press} · ${plan.input.material} · Teilkonti ${plan.input.partKonti ? 'ein' : 'aus'}`;
-  deliveryElements.tableBody.replaceChildren();
-  for (const row of plan.weekly) {
-    const tableRow = document.createElement('tr');
-    for (const value of [`KW ${row.calendarWeek}`, formatGermanDate(row.fridayDate), row.netTotal.toLocaleString('de-DE')]) {
-      const cell = document.createElement('td');
-      cell.textContent = value;
-      tableRow.append(cell);
+function renderDeliveryResults(plans) {
+  deliveryElements.resultList.replaceChildren();
+  for (const plan of plans) {
+    const card = document.createElement('article');
+    card.className = 'plan-result';
+    card.dataset.resultPlan = String(plan.planNumber);
+
+    const heading = document.createElement('div');
+    heading.className = 'section-heading';
+    const title = document.createElement('h3');
+    title.textContent = `Lieferplan ${plan.planNumber}`;
+    const badge = document.createElement('strong');
+    badge.className = 'model-badge';
+    badge.textContent = plan.input.modelmaster;
+    heading.append(title, badge);
+
+    const meta = document.createElement('p');
+    meta.className = 'result-meta';
+    meta.textContent = `${plan.input.designation} · Presse ${plan.input.press} · ${plan.input.material} · Teilkonti ${plan.input.partKonti ? 'ein' : 'aus'} · ${formatGermanDate(plan.input.startDate)}–${formatGermanDate(plan.input.endDate)}`;
+
+    const tableWrap = document.createElement('div');
+    tableWrap.className = 'table-wrap';
+    const table = document.createElement('table');
+    table.innerHTML = '<thead><tr><th>KW</th><th>Freitag</th><th>Netto</th></tr></thead>';
+    const tableBody = document.createElement('tbody');
+    for (const row of plan.weekly) {
+      const tableRow = document.createElement('tr');
+      for (const value of [`KW ${row.calendarWeek}`, formatGermanDate(row.fridayDate), row.netTotal.toLocaleString('de-DE')]) {
+        const cell = document.createElement('td');
+        cell.textContent = value;
+        tableRow.append(cell);
+      }
+      tableBody.append(tableRow);
     }
-    deliveryElements.tableBody.append(tableRow);
+    table.append(tableBody);
+    tableWrap.append(table);
+
+    const coverage = document.createElement('div');
+    coverage.className = 'coverage-summary';
+    const total = document.createElement('p');
+    total.append(document.createTextNode('Komplette Summe Lagereingang '));
+    const totalValue = document.createElement('strong');
+    totalValue.textContent = `${plan.coverage.totalNet.toLocaleString('de-DE')} Teile`;
+    total.append(totalValue);
+    const status = document.createElement('p');
+    status.className = `coverage-status ${plan.coverage.status}`;
+    status.textContent = coverageMessage(plan.coverage);
+    coverage.append(total, status);
+
+    card.append(heading, meta, tableWrap, coverage);
+    deliveryElements.resultList.append(card);
   }
-  deliveryElements.total.textContent = `${plan.coverage.totalNet.toLocaleString('de-DE')} Teile`;
-  deliveryElements.coverageStatus.textContent = coverageMessage(plan.coverage);
-  deliveryElements.coverageStatus.className = `coverage-status ${plan.coverage.status}`;
   deliveryElements.results.classList.remove('hidden');
   deliveryElements.shareStatus.innerHTML = `Beim Teilen kannst du „Mail“ auswählen. Empfänger: <span class="email">${EMAIL}</span>`;
   deliveryElements.results.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function makeDeliveryExcelFile() {
-  if (!currentDelivery || !window.XLSX) return null;
-  const { input, daily, weekly, coverage } = currentDelivery;
-  const summaryRows = [
-    ['Lieferplan', input.modelmaster],
-    ['Bezeichnung', input.designation],
-    ['Presse', input.press],
-    ['Werkstoff', input.material],
-    ['Teilkonti', input.partKonti ? 'Ein – Samstag/Sonntag keine Produktion' : 'Aus – Produktion an allen Kalendertagen'],
-    ['Startdatum Einguss', formatGermanDate(input.startDate)],
-    ['Enddatum Einguss', formatGermanDate(input.endDate)],
-    ['Brutto pro Tag', input.grossPerDay],
-    ['Durchlaufzeit in Tagen', input.leadTimeDays],
-    ['Yield in %', input.yieldPercent],
-    ['Fehlmenge', input.shortage === null ? 'nicht angegeben' : input.shortage],
-    ['Komplette Summe Lagereingang', coverage.totalNet],
-    ['Deckungsprüfung', coverageMessage(coverage)],
-    [],
-    ['Modelmaster', 'Bezeichnung', 'Presse', 'Werkstoff', 'Kalenderwoche', 'Freitag', 'Netto-Lagereingang'],
-    ...weekly.map((row) => [row.modelmaster, input.designation, input.press, input.material, row.calendarWeek, formatGermanDate(row.fridayDate), row.netTotal])
-  ];
+  if (!currentDeliveries.length || !window.XLSX) return null;
+  const summaryRows = [];
+  for (const plan of currentDeliveries) {
+    const { input, weekly, coverage, planNumber } = plan;
+    summaryRows.push(
+      [`Lieferplan ${planNumber}`, input.modelmaster],
+      ['Bezeichnung', input.designation],
+      ['Presse', input.press],
+      ['Werkstoff', input.material],
+      ['Teilkonti', input.partKonti ? 'Ein – Samstag/Sonntag keine Produktion' : 'Aus – Produktion an allen Kalendertagen'],
+      ['Startdatum Einguss', formatGermanDate(input.startDate)],
+      ['Enddatum Einguss', formatGermanDate(input.endDate)],
+      ['Brutto pro Tag', input.grossPerDay],
+      ['Durchlaufzeit in Tagen', input.leadTimeDays],
+      ['Yield in %', input.yieldPercent],
+      ['Fehlmenge', input.shortage === null ? 'nicht angegeben' : input.shortage],
+      ['Komplette Summe Lagereingang', coverage.totalNet],
+      ['Deckungsprüfung', coverageMessage(coverage)],
+      [],
+      ['Plan', 'Modelmaster', 'Bezeichnung', 'Presse', 'Werkstoff', 'Kalenderwoche', 'Freitag', 'Netto-Lagereingang'],
+      ...weekly.map((row) => [planNumber, row.modelmaster, input.designation, input.press, input.material, row.calendarWeek, formatGermanDate(row.fridayDate), row.netTotal]),
+      []
+    );
+  }
   const detailRows = [
-    ['Modelmaster', 'Bezeichnung', 'Presse', 'Werkstoff', 'Eingussdatum', 'Brutto', 'Netto', 'Lagereingang'],
-    ...daily.map((row) => [row.modelmaster, input.designation, input.press, input.material, formatGermanDate(row.castingDate), row.gross, row.net, formatGermanDate(row.warehouseDate)])
+    ['Plan', 'Modelmaster', 'Bezeichnung', 'Presse', 'Werkstoff', 'Teilkonti', 'Eingussdatum', 'Brutto', 'Netto', 'Lagereingang'],
+    ...currentDeliveries.flatMap(({ planNumber, input, daily }) => daily.map((row) => [
+      planNumber, row.modelmaster, input.designation, input.press, input.material, input.partKonti ? 'Ein' : 'Aus',
+      formatGermanDate(row.castingDate), row.gross, row.net, formatGermanDate(row.warehouseDate)
+    ]))
   ];
   const workbook = XLSX.utils.book_new();
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
   const detailSheet = XLSX.utils.aoa_to_sheet(detailRows);
-  summarySheet['!cols'] = [{ wch: 18 }, { wch: 24 }, { wch: 12 }, { wch: 15 }, { wch: 17 }, { wch: 15 }, { wch: 22 }];
-  detailSheet['!cols'] = [{ wch: 16 }, { wch: 24 }, { wch: 12 }, { wch: 15 }, { wch: 16 }, { wch: 13 }, { wch: 13 }, { wch: 16 }];
-  XLSX.utils.book_append_sheet(workbook, summarySheet, 'Wochenplan');
+  summarySheet['!cols'] = [{ wch: 20 }, { wch: 18 }, { wch: 24 }, { wch: 12 }, { wch: 15 }, { wch: 17 }, { wch: 15 }, { wch: 22 }];
+  detailSheet['!cols'] = [{ wch: 8 }, { wch: 16 }, { wch: 24 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 16 }, { wch: 13 }, { wch: 13 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(workbook, summarySheet, 'Wochenpläne');
   XLSX.utils.book_append_sheet(workbook, detailSheet, 'Tageswerte');
   const bytes = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-  return new File([bytes], `Lieferplan-${input.modelmaster}.xlsx`, {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  });
+  const filename = currentDeliveries.length === 1
+    ? `Lieferplan-${currentDeliveries[0].input.modelmaster}.xlsx`
+    : `Lieferplaene-${currentDeliveries.length}.xlsx`;
+  return new File([bytes], filename, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
 function downloadDeliveryExcel() {
@@ -457,7 +612,7 @@ async function shareDeliveryExcel() {
   try { await navigator.clipboard?.writeText(EMAIL); } catch { /* Teilen funktioniert auch ohne Zwischenablage. */ }
   if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
     try {
-      await navigator.share({ title: `Lieferplan ${currentDelivery.input.modelmaster}`, text: `Bitte an ${EMAIL} senden.`, files: [file] });
+      await navigator.share({ title: 'Lieferpläne', text: `Bitte an ${EMAIL} senden.`, files: [file] });
       deliveryElements.shareStatus.textContent = 'Excel-Datei wurde zum Teilen übergeben.';
       return;
     } catch (error) {
@@ -469,17 +624,16 @@ async function shareDeliveryExcel() {
 }
 
 function resetDeliveryPlan(ask = true) {
-  if (ask && !confirm('Lieferplan und alle Eingaben wirklich zurücksetzen?')) return;
+  if (ask && !confirm('Alle Lieferpläne und Eingaben wirklich zurücksetzen?')) return;
   deliveryElements.form.reset();
-  currentDelivery = null;
+  currentDeliveries = [];
   showDeliveryErrors([]);
-  deliveryElements.tableBody.replaceChildren();
+  deliveryElements.resultList.replaceChildren();
   deliveryElements.results.classList.add('hidden');
-  deliveryElements.model.textContent = '';
-  deliveryElements.meta.textContent = '';
-  deliveryElements.total.textContent = '';
-  deliveryElements.coverageStatus.textContent = '';
-  deliveryElements.partKontiState.textContent = 'Aus';
+  updatePartKontiState(1);
+  updatePlanAvailability(2);
+  updatePlanAvailability(3);
+  showPlanTab(1);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -489,31 +643,62 @@ document.querySelectorAll('[data-back-home]').forEach((button) => button.addEven
   if (scannerActive) stopScanner();
   showScreen(deliveryElements.startScreen);
 }));
-deliveryElements.modelInput.addEventListener('input', () => {
-  deliveryElements.modelInput.value = deliveryElements.modelInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
+deliveryElements.tabs.addEventListener('click', (event) => {
+  const tab = event.target.closest('[data-plan-tab]');
+  if (tab) showPlanTab(Number(tab.dataset.planTab));
 });
-deliveryElements.pressInput.addEventListener('input', () => {
-  deliveryElements.pressInput.value = deliveryElements.pressInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+deliveryElements.form.addEventListener('input', (event) => {
+  const panel = event.target.closest('[data-plan]');
+  if (!panel) return;
+  const number = Number(panel.dataset.plan);
+  const fieldName = event.target.dataset.field;
+  if (fieldName === 'modelmaster') event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
+  if (fieldName === 'press') event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+  if (fieldName === 'shortage') event.target.value = event.target.value.replace(/\D/g, '').slice(0, 6);
+  if (number === 1) {
+    for (const target of [2, 3]) {
+      const inheritInput = planPanel(target).querySelector('[data-role="inherit"]');
+      if (inheritInput.checked && !inheritInput.disabled) updatePlanAvailability(target);
+    }
+  }
 });
-deliveryElements.shortageInput.addEventListener('input', () => {
-  const digits = deliveryElements.shortageInput.value.replace(/\D/g, '').slice(0, 6);
-  if (deliveryElements.shortageInput.value !== digits) deliveryElements.shortageInput.value = digits;
-});
-deliveryElements.partKontiInput.addEventListener('change', () => {
-  deliveryElements.partKontiState.textContent = deliveryElements.partKontiInput.checked ? 'Ein' : 'Aus';
+deliveryElements.form.addEventListener('change', (event) => {
+  const panel = event.target.closest('[data-plan]');
+  if (!panel) return;
+  const number = Number(panel.dataset.plan);
+  if (event.target.matches('[data-role="active"], [data-role="inherit"]')) updatePlanAvailability(number);
+  if (event.target.dataset.field === 'partKonti') updatePartKontiState(number);
+  if (number === 1) {
+    for (const target of [2, 3]) {
+      const inheritInput = planPanel(target).querySelector('[data-role="inherit"]');
+      if (inheritInput.checked && !inheritInput.disabled) updatePlanAvailability(target);
+    }
+  }
 });
 deliveryElements.form.addEventListener('submit', (event) => {
   event.preventDefault();
-  const input = readDeliveryInput();
-  const errors = validateDeliveryInput(input);
+  const plans = [];
+  const errors = [];
+  let firstInvalidPlan = null;
+  for (const planNumber of [1, 2, 3]) {
+    const input = readPlanInput(planNumber);
+    if (!input.active) continue;
+    const planErrors = validateDeliveryInput(input);
+    if (planErrors.length && firstInvalidPlan === null) firstInvalidPlan = planNumber;
+    errors.push(...planErrors.map((error) => `Lieferplan ${planNumber}: ${error}`));
+    plans.push({ planNumber, input });
+  }
   showDeliveryErrors(errors);
   if (errors.length) {
     deliveryElements.results.classList.add('hidden');
+    showPlanTab(firstInvalidPlan);
     return;
   }
-  const daily = calculateDailyDeliveries(input);
-  currentDelivery = { input, daily, weekly: groupWeeklyDeliveries(daily), coverage: assessCoverage(input, daily) };
-  renderDeliveryResults(currentDelivery);
+  currentDeliveries = plans.map(({ planNumber, input }) => {
+    const daily = calculateDailyDeliveries(input);
+    return { planNumber, input, daily, weekly: groupWeeklyDeliveries(daily), coverage: assessCoverage(input, daily) };
+  });
+  renderDeliveryResults(currentDeliveries);
 });
 deliveryElements.share.addEventListener('click', shareDeliveryExcel);
 deliveryElements.download.addEventListener('click', downloadDeliveryExcel);

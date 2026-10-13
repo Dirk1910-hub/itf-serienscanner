@@ -10,7 +10,10 @@ Funktionen
 - Gibt nach einem erfolgreichen Scan oder einer manuellen Eingabe einen Bestätigungston aus.
 - Speichert die aktuelle Liste lokal auf dem Gerät.
 - Erstellt eine TXT-Datei oder öffnet eine E-Mail an thinnes13@freenet.de.
-- Berechnet für einen 7-stelligen Modelmaster mit Bezeichnung, 4-stelliger Presse und Werkstoff tägliche Netto-Mengen und Lagereingänge.
+- Berechnet für einen bis drei Lieferpläne jeweils einen 7-stelligen Modelmaster mit Bezeichnung, 4-stelliger Presse und Werkstoff.
+- Lieferplan 1 ist verpflichtend; Lieferplan 2 und 3 werden bei Bedarf in eigenen Reitern aktiviert.
+- In Plan 2 und 3 können alle Einstellungen aus Plan 1 übernommen werden. Eigene Start- und Enddaten bleiben erhalten; nach dem Ausschalten der Übernahme können die kopierten Werte für einen anderen Modelmaster geändert werden.
+- Jeder aktive Lieferplan besitzt eine eigene Teilkonti-Einstellung, Fehlmenge, Berechnung und Ergebnisübersicht.
 - Der Werkstoff ist als Auswahl zwischen TitanCerm und Vilboplus hinterlegt.
 - Rechnet den ersten Eingusstag mit 60 % der Brutto-Tagesmenge und rundet das Tages-Netto.
 - Fasst Lagereingänge von Samstag bis Freitag mit Kalenderwoche und Freitagsdatum zusammen.

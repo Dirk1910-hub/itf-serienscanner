@@ -10,10 +10,10 @@
   <title>Produktionshelfer</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=12">
+  <link rel="stylesheet" href="styles.css?v=13">
   <script defer src="vendor/zxing-browser.min.js"></script>
   <script defer src="vendor/xlsx.full.min.js"></script>
-  <script type="module" src="app.js?v=12"></script>
+  <script type="module" src="app.js?v=13"></script>
 </head>
 <body>
   <audio id="success-sound" preload="auto" playsinline src="scan-erfolgreich.wav"></audio>
@@ -118,57 +118,20 @@
       </header>
 
       <form id="delivery-form" class="form-card" novalidate>
-        <label for="modelmaster">Modelmaster <span>7-stellig, Buchstaben und Ziffern</span></label>
-        <input id="modelmaster" name="modelmaster" type="text" maxlength="7" pattern="[A-Za-z0-9]{7}" autocapitalize="characters" autocomplete="off" placeholder="A1B2C3D" required>
-
-        <label for="designation">Bezeichnung <span>Name oder Kollektion des Artikels</span></label>
-        <input id="designation" name="designation" type="text" maxlength="60" autocomplete="off" placeholder="z. B. Nova 2026" required>
-
-        <div class="form-grid two">
-          <div><label for="press">Presse <span>4-stellig, alphanumerisch</span></label><input id="press" name="press" type="text" maxlength="4" pattern="[A-Za-z0-9]{4}" autocapitalize="characters" autocomplete="off" placeholder="DG08" required></div>
-          <div><label for="material">Werkstoff</label><select id="material" name="material" required><option value="TitanCerm">TitanCerm</option><option value="Vilboplus">Vilboplus</option></select></div>
+        <div id="plan-tabs" class="plan-tabs" role="tablist" aria-label="Lieferpläne">
+          <button class="plan-tab active" type="button" role="tab" aria-selected="true" data-plan-tab="1">Plan 1</button>
+          <button class="plan-tab" type="button" role="tab" aria-selected="false" data-plan-tab="2">Plan 2</button>
+          <button class="plan-tab" type="button" role="tab" aria-selected="false" data-plan-tab="3">Plan 3</button>
         </div>
-
-        <label for="shortage">Fehlmenge <span>optional, nur Zahlen mit maximal 6 Stellen</span></label>
-        <input id="shortage" name="shortage" type="text" inputmode="numeric" pattern="[0-9]{1,6}" autocomplete="off" placeholder="z. B. 2500">
-
-        <label class="option-check" for="part-konti">
-          <input id="part-konti" name="partKonti" type="checkbox">
-          <span class="option-copy"><strong>Teilkonti</strong><small>Ein: Samstag und Sonntag keine Produktion</small></span>
-          <span id="part-konti-state" class="toggle-state">Aus</span>
-        </label>
-
-        <div class="form-grid two">
-          <div><label for="start-date">Startdatum Einguss</label><input id="start-date" name="startDate" type="date" required></div>
-          <div><label for="end-date">Enddatum Einguss</label><input id="end-date" name="endDate" type="date" required></div>
-        </div>
-        <div class="form-grid two">
-          <div><label for="gross-day">Brutto pro Tag</label><input id="gross-day" name="grossPerDay" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="100" required></div>
-          <div><label for="lead-time">Durchlaufzeit in Tagen</label><input id="lead-time" name="leadTimeDays" type="number" inputmode="numeric" min="0" step="1" placeholder="7" required></div>
-        </div>
-        <label for="yield-percent">Yield in %</label>
-        <input id="yield-percent" name="yieldPercent" type="number" inputmode="decimal" min="0.01" max="100" step="0.01" placeholder="80" required>
+        <div id="delivery-plan-panels"></div>
         <div id="delivery-errors" class="form-errors hidden" role="alert"></div>
-        <button class="primary form-submit" type="submit">Lieferplan berechnen</button>
+        <button class="primary form-submit" type="submit">Alle aktiven Lieferpläne berechnen</button>
       </form>
 
       <section id="delivery-results" class="results-card hidden" aria-labelledby="results-title">
-        <div class="section-heading">
-          <div><p class="eyebrow">ERGEBNIS</p><h2 id="results-title">Wöchentlicher Lagereingang</h2></div>
-          <strong id="result-model" class="model-badge"></strong>
-        </div>
+        <div class="section-heading"><div><p class="eyebrow">ERGEBNIS</p><h2 id="results-title">Wöchentliche Lagereingänge</h2></div></div>
         <p class="result-note">Zusammenfassung jeweils Samstag bis Freitag. Ausgabe am Freitag.</p>
-        <p id="result-meta" class="result-meta"></p>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>KW</th><th>Freitag</th><th>Netto</th></tr></thead>
-            <tbody id="delivery-table-body"></tbody>
-          </table>
-        </div>
-        <div class="coverage-summary">
-          <p>Komplette Summe Lagereingang <strong id="delivery-total"></strong></p>
-          <p id="coverage-status" class="coverage-status" role="status" aria-live="polite"></p>
-        </div>
+        <div id="delivery-result-list"></div>
         <div class="result-actions">
           <button id="export-excel" class="primary" type="button">Excel-Datei teilen</button>
           <button id="download-excel" class="secondary" type="button">Excel herunterladen</button>

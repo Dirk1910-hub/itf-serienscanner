@@ -18,6 +18,15 @@ function isValidIsoDate(value) {
   return formatIsoDate(parseIsoDate(value)) === value;
 }
 
+export function inheritPlanSettings(source, target) {
+  return {
+    ...source,
+    startDate: target.startDate,
+    endDate: target.endDate,
+    active: target.active
+  };
+}
+
 export function validateDeliveryInput(input) {
   const errors = [];
   if (!/^[A-Za-z0-9]{7}$/.test(String(input.modelmaster || ''))) {
