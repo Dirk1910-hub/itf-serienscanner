@@ -1,11 +1,13 @@
-import { addScan, createTextFileContent, isValidManualCode, isValidScannedCode } from './scanner-state.js?v=13';
-import { decodeFrameCandidates } from './frame-decoder.js?v=13';
-import { playSound, unlockSound } from './audio-feedback.js?v=13';
-import { cameraCounterTransform, requestPortraitLock } from './camera-orientation.js?v=13';
-import { assessCoverage, calculateDailyDeliveries, groupWeeklyDeliveries, inheritPlanSettings, validateDeliveryInput } from './delivery-plan.js?v=13';
+import { addScan, createTextFileContent, isValidManualCode, isValidScannedCode } from './scanner-state.js?v=14';
+import { decodeFrameCandidates } from './frame-decoder.js?v=14';
+import { playSound, unlockSound } from './audio-feedback.js?v=14';
+import { cameraCounterTransform, requestPortraitLock } from './camera-orientation.js?v=14';
+import { assessCombinedCoverage, calculateDailyDeliveries, groupWeeklyDeliveries, inheritPlanSettings, validateDeliveryInput } from './delivery-plan.js?v=14';
+import { createModelPreset, removeModelPreset, upsertModelPreset } from './model-presets.js?v=14';
 
 const EMAIL = 'thinnes13@freenet.de';
 const STORAGE_KEY = 'itf-scanner-scans-v1';
+const MODEL_PRESET_STORAGE_KEY = 'lieferplan-modellmaster-v1';
 const $ = (selector) => document.querySelector(selector);
 
 const elements = {
@@ -41,6 +43,8 @@ let audioContext = null;
 let blockedCode = null;
 let lastDecodeAt = 0;
 let currentDeliveries = [];
+let currentCombinedCoverage = null;
+let modelPresets = loadModelPresets();
 
 function loadScans() {
   try {
@@ -48,6 +52,20 @@ function loadScans() {
     if (!Array.isArray(stored)) return [];
     return stored.filter((item) => item && Number.isInteger(item.number) && typeof item.code === 'string');
   } catch { return []; }
+}
+
+function loadModelPresets() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(MODEL_PRESET_STORAGE_KEY) || '[]');
+    if (!Array.isArray(stored)) return [];
+    return stored.flatMap((item) => {
+      try { return [createModelPreset(item)]; } catch { return []; }
+    });
+  } catch { return []; }
+}
+
+function persistModelPresets() {
+  localStorage.setItem(MODEL_PRESET_STORAGE_KEY, JSON.stringify(modelPresets));
 }
 
 function saveAndRender() {
@@ -332,9 +350,19 @@ function showScreen(screen) {
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
-const PLAN_SETTING_FIELDS = ['modelmaster', 'designation', 'press', 'material', 'shortage', 'partKonti', 'grossPerDay', 'leadTimeDays', 'yieldPercent'];
+const PLAN_SETTING_FIELDS = ['modelmaster', 'designation', 'press', 'material', 'grossPerDay', 'leadTimeDays', 'yieldPercent'];
 
 function planPanelMarkup(number) {
+  const presetControls = number === 1 ? `
+    <section class="preset-box" aria-labelledby="preset-title">
+      <label id="preset-title" for="model-preset-select">Gespeicherter Modellmaster <span>Nur lokal auf diesem Gerät</span></label>
+      <select id="model-preset-select"><option value="">Bitte auswählen</option></select>
+      <div class="preset-actions">
+        <button id="save-model-preset" class="secondary" type="button">Aktuelle Daten lokal speichern</button>
+        <button id="delete-model-preset" class="text-button" type="button" disabled>Auswahl löschen</button>
+      </div>
+      <p id="model-preset-status" class="preset-status" role="status" aria-live="polite">Die Daten bleiben im lokalen App-Speicher und werden nicht ins Internet übertragen.</p>
+    </section>` : '';
   const optionalControls = number === 1 ? '' : `
     <div class="plan-options">
       <label class="option-check" for="active-${number}">
@@ -344,7 +372,7 @@ function planPanelMarkup(number) {
       </label>
       <label class="option-check" for="inherit-${number}">
         <input id="inherit-${number}" data-role="inherit" type="checkbox" disabled>
-        <span class="option-copy"><strong>Einstellungen aus Plan 1 übernehmen</strong><small>Alle Angaben außer Start- und Enddatum</small></span>
+        <span class="option-copy"><strong>Einstellungen aus Plan 1 übernehmen</strong><small>Datum, Fehlmenge und Teilkonti bleiben unabhängig</small></span>
         <span class="toggle-state" data-role="inherit-state">Aus</span>
       </label>
     </div>`;
@@ -352,6 +380,7 @@ function planPanelMarkup(number) {
     <section class="plan-panel${number === 1 ? '' : ' hidden'}" data-plan="${number}" role="tabpanel" aria-label="Lieferplan ${number}">
       <div class="plan-panel-title"><span>Lieferplan ${number}</span><small>${number === 1 ? 'Pflichtplan' : 'optional'}</small></div>
       ${optionalControls}
+      ${presetControls}
       <div class="plan-fields">
         <label for="modelmaster-${number}">Modelmaster <span>7-stellig, Buchstaben und Ziffern</span></label>
         <input id="modelmaster-${number}" data-field="modelmaster" type="text" maxlength="7" autocapitalize="characters" autocomplete="off" placeholder="A1B2C3D">
@@ -361,8 +390,8 @@ function planPanelMarkup(number) {
           <div><label for="press-${number}">Presse <span>4-stellig, alphanumerisch</span></label><input id="press-${number}" data-field="press" type="text" maxlength="4" autocapitalize="characters" autocomplete="off" placeholder="DG08"></div>
           <div><label for="material-${number}">Werkstoff</label><select id="material-${number}" data-field="material"><option value="TitanCerm">TitanCerm</option><option value="Vilboplus">Vilboplus</option></select></div>
         </div>
-        <label for="shortage-${number}">Fehlmenge <span>optional, nur Zahlen mit maximal 6 Stellen</span></label>
-        <input id="shortage-${number}" data-field="shortage" type="text" inputmode="numeric" autocomplete="off" placeholder="z. B. 2500">
+        ${number === 1 ? `<label for="shortage-1">Fehlmenge gesamt <span>optional, für die gemeinsame Prüfung aller Lieferpläne</span></label>
+        <input id="shortage-1" data-field="shortage" type="text" inputmode="numeric" autocomplete="off" placeholder="z. B. 2500">` : '<p class="independent-note">Die Fehlmenge aus Lieferplan 1 wird mit der Summe aller aktiven Lieferpläne verglichen.</p>'}
         <label class="option-check" for="part-konti-${number}">
           <input id="part-konti-${number}" data-field="partKonti" type="checkbox">
           <span class="option-copy"><strong>Teilkonti</strong><small>Ein: Samstag und Sonntag keine Produktion</small></span>
@@ -391,7 +420,8 @@ function planField(number, name) {
 }
 
 function readPlanInput(number) {
-  const shortageValue = planField(number, 'shortage').value;
+  const shortageControl = planField(number, 'shortage');
+  const shortageValue = shortageControl?.value ?? '';
   const activeInput = planPanel(number).querySelector('[data-role="active"]');
   return {
     active: number === 1 || Boolean(activeInput?.checked),
@@ -413,7 +443,8 @@ function writePlanInput(number, input) {
   for (const name of ['modelmaster', 'designation', 'press', 'material', 'startDate', 'endDate', 'grossPerDay', 'leadTimeDays', 'yieldPercent']) {
     planField(number, name).value = input[name] ?? '';
   }
-  planField(number, 'shortage').value = input.shortage ?? '';
+  const shortageControl = planField(number, 'shortage');
+  if (shortageControl) shortageControl.value = input.shortage ?? '';
   planField(number, 'partKonti').checked = Boolean(input.partKonti);
   const activeInput = planPanel(number).querySelector('[data-role="active"]');
   if (activeInput) activeInput.checked = Boolean(input.active);
@@ -461,18 +492,75 @@ function initializeDeliveryPlans() {
   showPlanTab(1);
 }
 
+function setModelPresetStatus(message, isError = false) {
+  const status = $('#model-preset-status');
+  status.textContent = message;
+  status.classList.toggle('error', isError);
+}
+
+function renderModelPresetOptions(selectedModelmaster = '') {
+  const select = $('#model-preset-select');
+  select.replaceChildren(new Option('Bitte auswählen', ''));
+  for (const preset of modelPresets) {
+    select.append(new Option(`${preset.modelmaster} – ${preset.designation}`, preset.modelmaster));
+  }
+  select.value = selectedModelmaster;
+  $('#delete-model-preset').disabled = !select.value;
+}
+
+function synchronizeInheritedPlans() {
+  for (const target of [2, 3]) {
+    const inheritInput = planPanel(target).querySelector('[data-role="inherit"]');
+    if (inheritInput.checked && !inheritInput.disabled) updatePlanAvailability(target);
+  }
+}
+
+function applySelectedModelPreset() {
+  const modelmaster = $('#model-preset-select').value;
+  $('#delete-model-preset').disabled = !modelmaster;
+  if (!modelmaster) return;
+  const preset = modelPresets.find((item) => item.modelmaster === modelmaster);
+  if (!preset) return;
+  writePlanInput(1, { ...readPlanInput(1), ...preset });
+  synchronizeInheritedPlans();
+  setModelPresetStatus(`${modelmaster} wurde in Lieferplan 1 eingesetzt.`);
+}
+
+function saveCurrentModelPreset() {
+  try {
+    const preset = createModelPreset(readPlanInput(1));
+    const existed = modelPresets.some((item) => item.modelmaster === preset.modelmaster);
+    modelPresets = upsertModelPreset(modelPresets, preset);
+    persistModelPresets();
+    renderModelPresetOptions(preset.modelmaster);
+    setModelPresetStatus(`${preset.modelmaster} wurde ${existed ? 'aktualisiert' : 'lokal gespeichert'}.`);
+  } catch (error) {
+    setModelPresetStatus(error.message, true);
+  }
+}
+
+function deleteSelectedModelPreset() {
+  const modelmaster = $('#model-preset-select').value;
+  if (!modelmaster || !confirm(`${modelmaster} wirklich aus dem lokalen Speicher löschen?`)) return;
+  modelPresets = removeModelPreset(modelPresets, modelmaster);
+  persistModelPresets();
+  renderModelPresetOptions();
+  setModelPresetStatus(`${modelmaster} wurde aus dem lokalen Speicher gelöscht.`);
+}
+
 initializeDeliveryPlans();
+renderModelPresetOptions();
 
 function coverageMessage(coverage) {
   const number = (value) => value.toLocaleString('de-DE');
   if (coverage.status === 'not-provided') return 'Keine Fehlmenge angegeben – es wird nur die Gesamtsumme ausgewiesen.';
   if (coverage.status === 'exact') return 'Fehlmenge exakt abgedeckt. Es sind weder zusätzliche noch weniger Produktionstage erforderlich.';
   if (coverage.status === 'shortfall') {
-    return `Nicht abgedeckt: Es fehlen ${number(-coverage.difference)} Teile. Mindestens ${coverage.additionalDays} zusätzliche${coverage.additionalDays === 1 ? 'r Produktionstag' : ' Produktionstage'} mit zusammen ${number(coverage.projectedTotal - coverage.totalNet)} Teilen ${coverage.additionalDays === 1 ? 'ist' : 'sind'} nötig. Danach beträgt der Lagereingang ${number(coverage.projectedTotal)} Teile und übersteigt die Fehlmenge um ${number(coverage.projectedSurplus)} Teile.`;
+    return `Nicht abgedeckt: Es fehlen ${number(-coverage.difference)} Teile. Bei Fortführung von Lieferplan ${coverage.continuationPlanNumber} ${coverage.additionalDays === 1 ? 'ist mindestens 1 zusätzlicher Produktionstag' : `sind mindestens ${coverage.additionalDays} zusätzliche Produktionstage`} nötig. Danach beträgt der Lagereingang ${number(coverage.projectedTotal)} Teile und übersteigt die Fehlmenge um ${number(coverage.projectedSurplus)} Teile.`;
   }
   const reduction = coverage.reducibleDays > 0
-    ? `Der Plan kann um bis zu ${coverage.reducibleDays} volle${coverage.reducibleDays === 1 ? 'n Produktionstag' : ' Produktionstage'} verkürzt werden. Danach verbleiben ${number(coverage.remainingTotal)} Teile Lagereingang.`
-    : 'Ein voller Produktionstag kann nicht entfallen, ohne die Fehlmenge zu unterschreiten.';
+    ? `Am Ende der Lieferpläne können bis zu ${coverage.reducibleDays} Produktionstag${coverage.reducibleDays === 1 ? '' : 'e'} entfallen. Danach verbleiben ${number(coverage.remainingTotal)} Teile Lagereingang.`
+    : 'Am Ende kann kein Produktionstag entfallen, ohne die Fehlmenge zu unterschreiten.';
   return `Fehlmenge abgedeckt: Der Lagereingang übersteigt sie um ${number(coverage.difference)} Teile. ${reduction}`;
 }
 
@@ -492,7 +580,7 @@ function showDeliveryErrors(errors) {
   deliveryElements.errors.classList.remove('hidden');
 }
 
-function renderDeliveryResults(plans) {
+function renderDeliveryResults(plans, combinedCoverage) {
   deliveryElements.resultList.replaceChildren();
   for (const plan of plans) {
     const card = document.createElement('article');
@@ -530,20 +618,30 @@ function renderDeliveryResults(plans) {
     tableWrap.append(table);
 
     const coverage = document.createElement('div');
-    coverage.className = 'coverage-summary';
+    coverage.className = 'coverage-summary plan-total';
     const total = document.createElement('p');
-    total.append(document.createTextNode('Komplette Summe Lagereingang '));
+    total.append(document.createTextNode(`Summe Lieferplan ${plan.planNumber} `));
     const totalValue = document.createElement('strong');
-    totalValue.textContent = `${plan.coverage.totalNet.toLocaleString('de-DE')} Teile`;
+    totalValue.textContent = `${plan.daily.reduce((sum, row) => sum + row.net, 0).toLocaleString('de-DE')} Teile`;
     total.append(totalValue);
-    const status = document.createElement('p');
-    status.className = `coverage-status ${plan.coverage.status}`;
-    status.textContent = coverageMessage(plan.coverage);
-    coverage.append(total, status);
+    coverage.append(total);
 
     card.append(heading, meta, tableWrap, coverage);
     deliveryElements.resultList.append(card);
   }
+
+  const combined = document.createElement('article');
+  combined.className = 'coverage-summary combined-coverage';
+  const combinedTotal = document.createElement('p');
+  combinedTotal.append(document.createTextNode('Gesamtsumme aller Lieferpläne '));
+  const combinedValue = document.createElement('strong');
+  combinedValue.textContent = `${combinedCoverage.totalNet.toLocaleString('de-DE')} Teile`;
+  combinedTotal.append(combinedValue);
+  const combinedStatus = document.createElement('p');
+  combinedStatus.className = `coverage-status ${combinedCoverage.status}`;
+  combinedStatus.textContent = coverageMessage(combinedCoverage);
+  combined.append(combinedTotal, combinedStatus);
+  deliveryElements.resultList.append(combined);
   deliveryElements.results.classList.remove('hidden');
   deliveryElements.shareStatus.innerHTML = `Beim Teilen kannst du „Mail“ auswählen. Empfänger: <span class="email">${EMAIL}</span>`;
   deliveryElements.results.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -553,7 +651,7 @@ function makeDeliveryExcelFile() {
   if (!currentDeliveries.length || !window.XLSX) return null;
   const summaryRows = [];
   for (const plan of currentDeliveries) {
-    const { input, weekly, coverage, planNumber } = plan;
+    const { input, weekly, daily, planNumber } = plan;
     summaryRows.push(
       [`Lieferplan ${planNumber}`, input.modelmaster],
       ['Bezeichnung', input.designation],
@@ -565,15 +663,20 @@ function makeDeliveryExcelFile() {
       ['Brutto pro Tag', input.grossPerDay],
       ['Durchlaufzeit in Tagen', input.leadTimeDays],
       ['Yield in %', input.yieldPercent],
-      ['Fehlmenge', input.shortage === null ? 'nicht angegeben' : input.shortage],
-      ['Komplette Summe Lagereingang', coverage.totalNet],
-      ['Deckungsprüfung', coverageMessage(coverage)],
+      [`Summe Lieferplan ${planNumber}`, daily.reduce((sum, row) => sum + row.net, 0)],
       [],
       ['Plan', 'Modelmaster', 'Bezeichnung', 'Presse', 'Werkstoff', 'Kalenderwoche', 'Freitag', 'Netto-Lagereingang'],
       ...weekly.map((row) => [planNumber, row.modelmaster, input.designation, input.press, input.material, row.calendarWeek, formatGermanDate(row.fridayDate), row.netTotal]),
       []
     );
   }
+  summaryRows.push(
+    ['Gemeinsame Deckungsprüfung'],
+    ['Fehlmenge aus Lieferplan 1', currentCombinedCoverage.shortage === null ? 'nicht angegeben' : currentCombinedCoverage.shortage],
+    ['Gesamtsumme aller Lieferpläne', currentCombinedCoverage.totalNet],
+    ['Ergebnis', coverageMessage(currentCombinedCoverage)],
+    []
+  );
   const detailRows = [
     ['Plan', 'Modelmaster', 'Bezeichnung', 'Presse', 'Werkstoff', 'Teilkonti', 'Eingussdatum', 'Brutto', 'Netto', 'Lagereingang'],
     ...currentDeliveries.flatMap(({ planNumber, input, daily }) => daily.map((row) => [
@@ -627,6 +730,7 @@ function resetDeliveryPlan(ask = true) {
   if (ask && !confirm('Alle Lieferpläne und Eingaben wirklich zurücksetzen?')) return;
   deliveryElements.form.reset();
   currentDeliveries = [];
+  currentCombinedCoverage = null;
   showDeliveryErrors([]);
   deliveryElements.resultList.replaceChildren();
   deliveryElements.results.classList.add('hidden');
@@ -647,6 +751,9 @@ deliveryElements.tabs.addEventListener('click', (event) => {
   const tab = event.target.closest('[data-plan-tab]');
   if (tab) showPlanTab(Number(tab.dataset.planTab));
 });
+$('#model-preset-select').addEventListener('change', applySelectedModelPreset);
+$('#save-model-preset').addEventListener('click', saveCurrentModelPreset);
+$('#delete-model-preset').addEventListener('click', deleteSelectedModelPreset);
 deliveryElements.form.addEventListener('input', (event) => {
   const panel = event.target.closest('[data-plan]');
   if (!panel) return;
@@ -655,12 +762,7 @@ deliveryElements.form.addEventListener('input', (event) => {
   if (fieldName === 'modelmaster') event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
   if (fieldName === 'press') event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
   if (fieldName === 'shortage') event.target.value = event.target.value.replace(/\D/g, '').slice(0, 6);
-  if (number === 1) {
-    for (const target of [2, 3]) {
-      const inheritInput = planPanel(target).querySelector('[data-role="inherit"]');
-      if (inheritInput.checked && !inheritInput.disabled) updatePlanAvailability(target);
-    }
-  }
+  if (number === 1) synchronizeInheritedPlans();
 });
 deliveryElements.form.addEventListener('change', (event) => {
   const panel = event.target.closest('[data-plan]');
@@ -668,12 +770,7 @@ deliveryElements.form.addEventListener('change', (event) => {
   const number = Number(panel.dataset.plan);
   if (event.target.matches('[data-role="active"], [data-role="inherit"]')) updatePlanAvailability(number);
   if (event.target.dataset.field === 'partKonti') updatePartKontiState(number);
-  if (number === 1) {
-    for (const target of [2, 3]) {
-      const inheritInput = planPanel(target).querySelector('[data-role="inherit"]');
-      if (inheritInput.checked && !inheritInput.disabled) updatePlanAvailability(target);
-    }
-  }
+  if (number === 1) synchronizeInheritedPlans();
 });
 deliveryElements.form.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -696,9 +793,10 @@ deliveryElements.form.addEventListener('submit', (event) => {
   }
   currentDeliveries = plans.map(({ planNumber, input }) => {
     const daily = calculateDailyDeliveries(input);
-    return { planNumber, input, daily, weekly: groupWeeklyDeliveries(daily), coverage: assessCoverage(input, daily) };
+    return { planNumber, input, daily, weekly: groupWeeklyDeliveries(daily) };
   });
-  renderDeliveryResults(currentDeliveries);
+  currentCombinedCoverage = assessCombinedCoverage(currentDeliveries, currentDeliveries[0].input.shortage);
+  renderDeliveryResults(currentDeliveries, currentCombinedCoverage);
 });
 deliveryElements.share.addEventListener('click', shareDeliveryExcel);
 deliveryElements.download.addEventListener('click', downloadDeliveryExcel);

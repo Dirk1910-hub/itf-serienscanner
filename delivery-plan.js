@@ -21,6 +21,8 @@ function isValidIsoDate(value) {
 export function inheritPlanSettings(source, target) {
   return {
     ...source,
+    shortage: target.shortage,
+    partKonti: target.partKonti,
     startDate: target.startDate,
     endDate: target.endDate,
     active: target.active
@@ -137,6 +139,30 @@ export function assessCoverage(input, rows) {
     reducibleDays,
     remainingTotal: totalNet - reducibleDays * fullDayNet,
     status: difference < 0 ? 'shortfall' : difference > 0 ? 'surplus' : 'exact'
+  };
+}
+
+export function assessCombinedCoverage(plans, shortage) {
+  const continuationPlan = plans.at(-1);
+  const combinedRows = plans.flatMap((plan) => plan.daily);
+  const coverage = assessCoverage({ ...continuationPlan.input, shortage }, combinedRows);
+  let remainingTotal = coverage.totalNet;
+  let reducibleDays = 0;
+  if (coverage.difference > 0) {
+    outer: for (let planIndex = plans.length - 1; planIndex >= 0; planIndex -= 1) {
+      const rows = plans[planIndex].daily;
+      for (let rowIndex = rows.length - 1; rowIndex >= 0; rowIndex -= 1) {
+        if (remainingTotal - rows[rowIndex].net < Number(shortage)) break outer;
+        remainingTotal -= rows[rowIndex].net;
+        reducibleDays += 1;
+      }
+    }
+  }
+  return {
+    ...coverage,
+    reducibleDays,
+    remainingTotal,
+    continuationPlanNumber: continuationPlan.planNumber
   };
 }
 

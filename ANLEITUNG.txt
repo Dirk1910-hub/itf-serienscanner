@@ -12,15 +12,18 @@ Funktionen
 - Erstellt eine TXT-Datei oder öffnet eine E-Mail an thinnes13@freenet.de.
 - Berechnet für einen bis drei Lieferpläne jeweils einen 7-stelligen Modelmaster mit Bezeichnung, 4-stelliger Presse und Werkstoff.
 - Lieferplan 1 ist verpflichtend; Lieferplan 2 und 3 werden bei Bedarf in eigenen Reitern aktiviert.
-- In Plan 2 und 3 können alle Einstellungen aus Plan 1 übernommen werden. Eigene Start- und Enddaten bleiben erhalten; nach dem Ausschalten der Übernahme können die kopierten Werte für einen anderen Modelmaster geändert werden.
-- Jeder aktive Lieferplan besitzt eine eigene Teilkonti-Einstellung, Fehlmenge, Berechnung und Ergebnisübersicht.
+- In Plan 2 und 3 können Stammdaten und Leistungswerte aus Plan 1 übernommen werden. Eigene Start- und Enddaten sowie Teilkonti bleiben unabhängig bedienbar; nach dem Ausschalten der Übernahme können die kopierten Werte für einen anderen Modelmaster geändert werden.
+- Jeder aktive Lieferplan besitzt eine eigene Teilkonti-Einstellung, Berechnung und Ergebnisübersicht.
+- Häufig verwendete Modellmaster mit Bezeichnung, Presse, Werkstoff, Brutto pro Tag, Durchlaufzeit und Yield können in Plan 1 lokal gespeichert, ausgewählt, aktualisiert und gelöscht werden.
+- Die Modellmaster-Einstellungen bleiben nur im lokalen App-Speicher des Geräts und werden nicht an GitHub oder andere Internetdienste übertragen.
 - Der Werkstoff ist als Auswahl zwischen TitanCerm und Vilboplus hinterlegt.
 - Rechnet den ersten Eingusstag mit 60 % der Brutto-Tagesmenge und rundet das Tages-Netto.
 - Fasst Lagereingänge von Samstag bis Freitag mit Kalenderwoche und Freitagsdatum zusammen.
-- Nimmt optional eine rein numerische Fehlmenge mit maximal 6 Stellen auf.
-- Teilkonti kann ein- oder ausgeschaltet werden. Bei Teilkonti ein findet samstags und sonntags keine Produktion statt; die Durchlaufzeit bleibt in Kalendertagen.
-- Zeigt die komplette Lagereingangssumme und prüft, ob sie die Fehlmenge abdeckt.
-- Empfiehlt bei Unterdeckung die mindestens zusätzlich nötigen Produktionstage und bei Überdeckung die maximal einsparbaren vollen Produktionstage.
+- Nimmt in Lieferplan 1 optional eine rein numerische Gesamtfehlmenge mit maximal 6 Stellen auf.
+- Teilkonti kann in jedem aktiven Plan unabhängig ein- oder ausgeschaltet werden. Bei Teilkonti ein findet samstags und sonntags keine Produktion statt; die Durchlaufzeit bleibt in Kalendertagen.
+- Zeigt die Lagereingangssumme jedes Plans und zusätzlich die Gesamtsumme aller aktiven Lieferpläne.
+- Vergleicht ausschließlich diese Gesamtsumme mit der Fehlmenge aus Lieferplan 1.
+- Empfiehlt bei Unterdeckung die mindestens zusätzlich nötigen Produktionstage und bei Überdeckung die am Ende maximal einsparbaren Produktionstage.
 - Erstellt eine Excel-Datei mit Wochenplan und Tageswerten zum Teilen per E-Mail.
 
 Installation auf dem iPhone
@@ -37,5 +40,7 @@ fertig adressierte E-Mail mit den Nummern im Nachrichtentext. Für sehr lange Li
 Teilen-Menü „Mail“ wählen und die Adresse einsetzen.
 
 Datenschutz
-Die gescannten Nummern bleiben im lokalen Speicher des Geräts, bis „Liste vollständig
-löschen“ gewählt oder die Website-Daten im Browser gelöscht werden.
+Die gescannten Nummern und gespeicherten Modellmaster bleiben im lokalen Speicher des Geräts.
+Sie werden nicht mit GitHub synchronisiert. „Liste vollständig löschen“ entfernt die Scanliste;
+Modellmaster werden über „Auswahl löschen“ entfernt. Beim Löschen der Website-Daten im Browser
+oder beim Deinstallieren der PWA können alle lokal gespeicherten Daten verloren gehen.
