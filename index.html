@@ -10,10 +10,10 @@
   <title>Produktionshelfer</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=14">
+  <link rel="stylesheet" href="styles.css?v=15">
   <script defer src="vendor/zxing-browser.min.js"></script>
   <script defer src="vendor/xlsx.full.min.js"></script>
-  <script type="module" src="app.js?v=14"></script>
+  <script type="module" src="app.js?v=15"></script>
 </head>
 <body>
   <audio id="success-sound" preload="auto" playsinline src="scan-erfolgreich.wav"></audio>
@@ -38,7 +38,46 @@
           <span><strong>Lieferplan</strong><small>Netto-Lagereingänge nach Kalenderwoche berechnen</small></span>
           <span class="menu-arrow" aria-hidden="true">›</span>
         </button>
+        <button id="open-soundboard" class="menu-card" type="button">
+          <span class="menu-icon soundboard-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48"><path d="M8 20h8l10-8v24L16 28H8z"/><path d="M33 17c4 4 4 10 0 14M38 12c7 7 7 17 0 24"/></svg>
+          </span>
+          <span><strong>Nippelboard</strong><small>Zehn eigene Sounds aufnehmen und auf Knopfdruck abspielen</small></span>
+          <span class="menu-arrow" aria-hidden="true">›</span>
+        </button>
       </div>
+    </section>
+
+    <section id="soundboard-screen" class="screen hidden" aria-labelledby="soundboard-title">
+      <button class="back-button" data-back-home type="button">‹ Startmenü</button>
+      <header class="page-header soundboard-header">
+        <p class="eyebrow">NIPPELBOARD</p>
+        <h1 id="soundboard-title">Drücken. Hören. Lachen.</h1>
+        <p>Tippe auf einen großen Knopf, um den hinterlegten Sound abzuspielen. Über „Ändern“ kannst du eine Aufnahme oder Audiodatei zuweisen.</p>
+      </header>
+      <div id="soundboard-status" class="status neutral" role="status" aria-live="polite">Die Sounds bleiben ausschließlich lokal auf diesem Gerät.</div>
+      <div id="sound-grid" class="sound-grid" aria-label="Zehn Soundknöpfe"></div>
+
+      <section id="sound-editor" class="sound-editor hidden" aria-labelledby="sound-editor-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">SOUND EINRICHTEN</p><h2 id="sound-editor-title">Sound 1</h2></div>
+          <button id="close-sound-editor" class="text-button" type="button">Schließen</button>
+        </div>
+        <label for="sound-label">Name des Knopfes</label>
+        <input id="sound-label" type="text" maxlength="30" autocomplete="off" placeholder="z. B. Tusch">
+        <button id="save-sound-label" class="secondary" type="button">Namen speichern</button>
+        <div class="sound-source-actions">
+          <label class="primary file-picker" for="sound-file">Audiodatei auswählen</label>
+          <input id="sound-file" class="visually-hidden" type="file" accept="audio/*">
+          <button id="start-sound-recording" class="secondary" type="button">● Eigene Aufnahme starten</button>
+          <button id="stop-sound-recording" class="record-stop hidden" type="button">■ Aufnahme stoppen</button>
+        </div>
+        <p id="recording-time" class="recording-time hidden" aria-live="polite">Aufnahme läuft: 0 Sekunden</p>
+        <button id="delete-sound" class="reset-button" type="button">Diesen Sound löschen</button>
+        <p class="hint">Unterstützt werden Audiodateien bis 15 MB. Eine Aufnahme endet automatisch nach 30 Sekunden.</p>
+      </section>
+      <button id="clear-soundboard" class="reset-button soundboard-clear" type="button">Alle zehn Sounds löschen</button>
+      <p class="sound-privacy">Die Audiodaten werden im lokalen App-Speicher abgelegt und nicht zu GitHub oder einem anderen Internetdienst übertragen.</p>
     </section>
 
     <section id="scanner-screen" class="screen hidden" aria-labelledby="scanner-title">

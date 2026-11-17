@@ -2,7 +2,10 @@ PRODUKTIONSHELFER – KURZANLEITUNG
 =================================
 
 Funktionen
-- Zeigt bei jedem Start ein Menü mit „Ident scannen“ und „Lieferplan“.
+- Zeigt bei jedem Start ein Menü mit „Ident scannen“, „Lieferplan“ und „Nippelboard“.
+- Das Nippelboard besitzt zehn große, farbige Knöpfe für eigene Sounds.
+- Jedem Knopf kann lokal eine Audiodatei bis 15 MB oder eine eigene Mikrofonaufnahme bis 30 Sekunden zugewiesen werden.
+- Die Knöpfe können benannt, abgespielt, neu belegt und einzeln oder gemeinsam gelöscht werden.
 - Liest ausschließlich ITF-Barcodes (Interleaved 2 of 5) mit genau 10 Ziffern.
 - Schreibt jeden neuen Code als reine Zahl in eine eigene Zeile.
 - Meldet doppelte Codes und trägt sie nicht erneut ein.
@@ -40,7 +43,9 @@ fertig adressierte E-Mail mit den Nummern im Nachrichtentext. Für sehr lange Li
 Teilen-Menü „Mail“ wählen und die Adresse einsetzen.
 
 Datenschutz
-Die gescannten Nummern und gespeicherten Modellmaster bleiben im lokalen Speicher des Geräts.
-Sie werden nicht mit GitHub synchronisiert. „Liste vollständig löschen“ entfernt die Scanliste;
-Modellmaster werden über „Auswahl löschen“ entfernt. Beim Löschen der Website-Daten im Browser
-oder beim Deinstallieren der PWA können alle lokal gespeicherten Daten verloren gehen.
+Die gescannten Nummern, gespeicherten Modellmaster und Nippelboard-Sounds bleiben im lokalen
+Speicher des Geräts. Sie werden nicht mit GitHub synchronisiert. Für eigene Aufnahmen fragt die
+App nach der Mikrofonfreigabe; die Aufnahme wird anschließend nur lokal gespeichert.
+„Liste vollständig löschen“ entfernt die Scanliste, Modellmaster werden über „Auswahl löschen“
+entfernt und Sounds direkt im Nippelboard. Beim Löschen der Website-Daten im Browser oder beim
+Deinstallieren der PWA können alle lokal gespeicherten Daten und Sounds verloren gehen.

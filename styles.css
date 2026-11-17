@@ -92,6 +92,33 @@ h2 { margin-bottom: 0; font-size: 20px; }
 .menu-icon { width: 58px; height: 58px; display: grid; place-content: center; border-radius: 17px; background: var(--teal-soft); color: var(--teal); font-size: 32px; font-weight: 800; }
 .menu-icon svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .delivery-icon { background: #e8eefb; color: #315fa5; }
+.soundboard-icon { background: #ffe8b5; color: #9a4d00; }
+.sound-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.sound-card { min-width: 0; padding: 10px; border: 1px solid #e1ded5; border-radius: 20px; background: var(--card); box-shadow: var(--shadow); }
+.sound-card:nth-child(5n + 1) { --pad: #e34f6f; --pad-dark: #bd3654; }
+.sound-card:nth-child(5n + 2) { --pad: #7657d5; --pad-dark: #5840aa; }
+.sound-card:nth-child(5n + 3) { --pad: #e58a24; --pad-dark: #b86712; }
+.sound-card:nth-child(5n + 4) { --pad: #248f89; --pad-dark: #176b67; }
+.sound-card:nth-child(5n) { --pad: #3678c8; --pad-dark: #285a98; }
+.sound-pad { width: 100%; min-height: 112px; display: grid; place-content: center; gap: 6px; border: 0; border-radius: 16px; padding: 13px 8px; background: linear-gradient(145deg, color-mix(in srgb, var(--pad), white 12%), var(--pad)); color: white; box-shadow: inset 0 -5px 0 rgba(0,0,0,.13), 0 7px 12px color-mix(in srgb, var(--pad), transparent 72%); text-align: center; }
+.sound-pad:active, .sound-pad.playing { transform: translateY(3px); background: var(--pad-dark); box-shadow: inset 0 -2px 0 rgba(0,0,0,.12); }
+.sound-pad.empty { background: linear-gradient(145deg, #9ca8a6, #7b8987); box-shadow: inset 0 -5px 0 rgba(0,0,0,.12); }
+.sound-pad-icon { font-size: 30px; line-height: 1; }
+.sound-pad-label { max-width: 125px; overflow: hidden; text-overflow: ellipsis; color: inherit; font-size: 16px; font-weight: 900; white-space: nowrap; }
+.sound-pad-state { color: rgba(255,255,255,.82); font-size: 11px; font-weight: 750; }
+.sound-edit-button { width: 100%; min-height: 44px; margin-top: 7px; border: 0; border-radius: 11px; background: #f0f3f2; color: var(--ink); font-weight: 800; }
+.sound-editor { margin-top: 16px; padding: 18px; border-radius: 20px; background: var(--card); box-shadow: var(--shadow); }
+.sound-editor > label { display: block; margin: 16px 0 7px; color: var(--ink); font-size: 14px; font-weight: 800; }
+.sound-editor input[type="text"] { width: 100%; min-height: 52px; margin-bottom: 10px; border: 2px solid #c7d8d5; border-radius: 13px; padding: 10px 12px; background: #f9fbfa; color: var(--ink); font: 750 17px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.sound-editor input[type="text"]:focus { outline: 3px solid rgba(15,118,110,.18); border-color: var(--teal); }
+.sound-editor .secondary, .sound-editor .primary, .sound-editor .record-stop { width: 100%; }
+.sound-source-actions { display: grid; gap: 9px; margin-top: 16px; }
+.file-picker { min-height: 48px; display: grid; place-content: center; text-align: center; cursor: pointer; }
+.record-stop { border: 0; border-radius: 14px; padding: 13px 18px; background: #c53030; color: white; font-weight: 850; }
+.recording-time { margin: 12px 0 0; padding: 10px 12px; border-radius: 11px; background: #fde7e5; color: var(--danger); font-size: 14px; font-weight: 850; text-align: center; }
+.soundboard-clear { margin-top: 16px; }
+.sound-privacy { margin: 10px 4px 0; color: var(--muted); font-size: 12px; line-height: 1.5; text-align: center; }
+.visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
 .menu-arrow { color: var(--teal); font-size: 34px; font-weight: 300; }
 .back-button { min-height: 44px; margin: -4px 0 10px; padding: 4px 2px; border: 0; background: transparent; color: var(--teal); font-weight: 800; }
 .page-header { margin-bottom: 18px; }

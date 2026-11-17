@@ -1,9 +1,10 @@
-import { addScan, createTextFileContent, isValidManualCode, isValidScannedCode } from './scanner-state.js?v=14';
-import { decodeFrameCandidates } from './frame-decoder.js?v=14';
-import { playSound, unlockSound } from './audio-feedback.js?v=14';
-import { cameraCounterTransform, requestPortraitLock } from './camera-orientation.js?v=14';
-import { assessCombinedCoverage, calculateDailyDeliveries, groupWeeklyDeliveries, inheritPlanSettings, validateDeliveryInput } from './delivery-plan.js?v=14';
-import { createModelPreset, removeModelPreset, upsertModelPreset } from './model-presets.js?v=14';
+import { addScan, createTextFileContent, isValidManualCode, isValidScannedCode } from './scanner-state.js?v=15';
+import { decodeFrameCandidates } from './frame-decoder.js?v=15';
+import { playSound, unlockSound } from './audio-feedback.js?v=15';
+import { cameraCounterTransform, requestPortraitLock } from './camera-orientation.js?v=15';
+import { assessCombinedCoverage, calculateDailyDeliveries, groupWeeklyDeliveries, inheritPlanSettings, validateDeliveryInput } from './delivery-plan.js?v=15';
+import { createModelPreset, removeModelPreset, upsertModelPreset } from './model-presets.js?v=15';
+import { clearSoundRecords, createSoundSlots, deleteSoundRecord, loadSoundRecords, normalizeSoundLabel, saveSoundRecord, validateSoundBlob } from './soundboard.js?v=15';
 
 const EMAIL = 'thinnes13@freenet.de';
 const STORAGE_KEY = 'itf-scanner-scans-v1';
@@ -20,11 +21,18 @@ const elements = {
 };
 
 const deliveryElements = {
-  startScreen: $('#start-screen'), scannerScreen: $('#scanner-screen'), deliveryScreen: $('#delivery-screen'),
+  startScreen: $('#start-screen'), scannerScreen: $('#scanner-screen'), deliveryScreen: $('#delivery-screen'), soundboardScreen: $('#soundboard-screen'),
   openScanner: $('#open-scanner'), openDelivery: $('#open-delivery'), form: $('#delivery-form'),
   tabs: $('#plan-tabs'), panels: $('#delivery-plan-panels'), errors: $('#delivery-errors'),
   results: $('#delivery-results'), resultList: $('#delivery-result-list'), share: $('#export-excel'), download: $('#download-excel'),
   reset: $('#reset-delivery'), shareStatus: $('#delivery-share-status')
+};
+
+const soundboardElements = {
+  open: $('#open-soundboard'), grid: $('#sound-grid'), status: $('#soundboard-status'), editor: $('#sound-editor'),
+  editorTitle: $('#sound-editor-title'), closeEditor: $('#close-sound-editor'), label: $('#sound-label'), saveLabel: $('#save-sound-label'),
+  file: $('#sound-file'), startRecording: $('#start-sound-recording'), stopRecording: $('#stop-sound-recording'),
+  recordingTime: $('#recording-time'), delete: $('#delete-sound'), clear: $('#clear-soundboard')
 };
 
 let scans = loadScans();
@@ -45,6 +53,15 @@ let lastDecodeAt = 0;
 let currentDeliveries = [];
 let currentCombinedCoverage = null;
 let modelPresets = loadModelPresets();
+let soundSlots = createSoundSlots();
+let selectedSoundId = null;
+let activeBoardAudio = null;
+let activeBoardUrl = null;
+let soundRecorder = null;
+let soundRecordingStream = null;
+let soundRecordingChunks = [];
+let soundRecordingStartedAt = 0;
+let soundRecordingTimer = null;
 
 function loadScans() {
   try {
@@ -338,13 +355,253 @@ function submitManualCode(event) {
   closeManualPanel();
 }
 
+function setSoundboardStatus(message, kind = 'neutral') {
+  soundboardElements.status.textContent = message;
+  soundboardElements.status.className = `status ${kind}`;
+}
+
+function getSoundSlot(id) {
+  return soundSlots.find((slot) => slot.id === Number(id));
+}
+
+function stopBoardAudio() {
+  if (activeBoardAudio) {
+    activeBoardAudio.pause();
+    activeBoardAudio.currentTime = 0;
+  }
+  if (activeBoardUrl) URL.revokeObjectURL(activeBoardUrl);
+  activeBoardAudio = null;
+  activeBoardUrl = null;
+  soundboardElements.grid.querySelectorAll('.sound-pad.playing').forEach((button) => button.classList.remove('playing'));
+}
+
+function renderSoundboard() {
+  soundboardElements.grid.replaceChildren();
+  for (const slot of soundSlots) {
+    const card = document.createElement('article');
+    card.className = 'sound-card';
+    const play = document.createElement('button');
+    play.type = 'button';
+    play.className = `sound-pad${slot.hasAudio ? '' : ' empty'}`;
+    play.dataset.soundPlay = String(slot.id);
+    play.setAttribute('aria-label', slot.hasAudio ? `${slot.label} abspielen` : `${slot.label} einrichten`);
+    const icon = document.createElement('span');
+    icon.className = 'sound-pad-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = slot.hasAudio ? '▶' : '＋';
+    const label = document.createElement('strong');
+    label.className = 'sound-pad-label';
+    label.textContent = slot.label;
+    const state = document.createElement('span');
+    state.className = 'sound-pad-state';
+    state.textContent = slot.hasAudio ? 'Antippen zum Abspielen' : 'Noch kein Sound';
+    play.append(icon, label, state);
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'sound-edit-button';
+    edit.dataset.soundEdit = String(slot.id);
+    edit.textContent = slot.hasAudio ? 'Ändern' : 'Sound zuweisen';
+    card.append(play, edit);
+    soundboardElements.grid.append(card);
+  }
+  soundboardElements.clear.disabled = !soundSlots.some((slot) => slot.hasAudio);
+}
+
+async function reloadSoundboard() {
+  try {
+    soundSlots = createSoundSlots(await loadSoundRecords());
+    renderSoundboard();
+  } catch {
+    renderSoundboard();
+    setSoundboardStatus('Der lokale Sound-Speicher konnte nicht geöffnet werden.', 'error');
+  }
+}
+
+function openSoundEditor(id) {
+  const slot = getSoundSlot(id);
+  if (!slot) return;
+  selectedSoundId = slot.id;
+  soundboardElements.editorTitle.textContent = `Knopf ${slot.id} einrichten`;
+  soundboardElements.label.value = slot.label;
+  soundboardElements.delete.disabled = !slot.hasAudio;
+  soundboardElements.editor.classList.remove('hidden');
+  soundboardElements.editor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeSoundEditor() {
+  if (soundRecorder?.state === 'recording') stopSoundRecording();
+  soundboardElements.editor.classList.add('hidden');
+  soundboardElements.file.value = '';
+  selectedSoundId = null;
+}
+
+async function saveSoundBlob(blob, targetId = selectedSoundId) {
+  const validation = validateSoundBlob(blob);
+  if (!validation.valid) {
+    setSoundboardStatus(validation.error, 'error');
+    return false;
+  }
+  const slot = getSoundSlot(targetId);
+  if (!slot) return false;
+  const label = normalizeSoundLabel(soundboardElements.label.value, targetId);
+  try {
+    await saveSoundRecord({ id: targetId, label, blob });
+    await reloadSoundboard();
+    soundboardElements.label.value = label;
+    soundboardElements.delete.disabled = false;
+    setSoundboardStatus(`${label} wurde lokal auf Knopf ${targetId} gespeichert.`, 'success');
+    return true;
+  } catch (error) {
+    setSoundboardStatus(error.message || 'Der Sound konnte nicht gespeichert werden.', 'error');
+    return false;
+  }
+}
+
+async function handleSoundFile() {
+  const [file] = soundboardElements.file.files || [];
+  if (!file) return;
+  await saveSoundBlob(file);
+  soundboardElements.file.value = '';
+}
+
+async function saveSelectedSoundLabel() {
+  const slot = getSoundSlot(selectedSoundId);
+  if (!slot?.hasAudio) {
+    setSoundboardStatus('Bitte zuerst eine Audiodatei auswählen oder einen Sound aufnehmen.', 'warning');
+    return;
+  }
+  const label = normalizeSoundLabel(soundboardElements.label.value, slot.id);
+  try {
+    await saveSoundRecord({ id: slot.id, label, blob: slot.blob });
+    await reloadSoundboard();
+    soundboardElements.label.value = label;
+    setSoundboardStatus(`Der Knopf heißt jetzt „${label}“.`, 'success');
+  } catch (error) {
+    setSoundboardStatus(error.message || 'Der Name konnte nicht gespeichert werden.', 'error');
+  }
+}
+
+async function deleteSelectedSound() {
+  const slot = getSoundSlot(selectedSoundId);
+  if (!slot?.hasAudio || !confirm(`„${slot.label}“ wirklich löschen?`)) return;
+  await deleteSoundRecord(slot.id);
+  await reloadSoundboard();
+  closeSoundEditor();
+  setSoundboardStatus(`Sound ${slot.id} wurde gelöscht.`, 'neutral');
+}
+
+async function clearEntireSoundboard() {
+  if (!soundSlots.some((slot) => slot.hasAudio) || !confirm('Wirklich alle zehn Sounds vom Gerät löschen?')) return;
+  stopBoardAudio();
+  await clearSoundRecords();
+  await reloadSoundboard();
+  closeSoundEditor();
+  setSoundboardStatus('Alle Sounds wurden vom Gerät gelöscht.', 'neutral');
+}
+
+async function playSoundSlot(id, button) {
+  const slot = getSoundSlot(id);
+  if (!slot?.hasAudio) {
+    openSoundEditor(id);
+    setSoundboardStatus(`Knopf ${id} ist noch leer. Weise ihm eine Datei oder Aufnahme zu.`, 'warning');
+    return;
+  }
+  stopBoardAudio();
+  activeBoardUrl = URL.createObjectURL(slot.blob);
+  activeBoardAudio = new Audio(activeBoardUrl);
+  button.classList.add('playing');
+  const finish = () => stopBoardAudio();
+  activeBoardAudio.addEventListener('ended', finish, { once: true });
+  activeBoardAudio.addEventListener('error', finish, { once: true });
+  try {
+    await activeBoardAudio.play();
+    setSoundboardStatus(`Spielt: ${slot.label}`, 'success');
+  } catch {
+    finish();
+    setSoundboardStatus('Der Sound konnte nicht abgespielt werden.', 'error');
+  }
+}
+
+function resetRecordingControls() {
+  clearInterval(soundRecordingTimer);
+  soundRecordingTimer = null;
+  soundboardElements.startRecording.classList.remove('hidden');
+  soundboardElements.stopRecording.classList.add('hidden');
+  soundboardElements.stopRecording.disabled = false;
+  soundboardElements.stopRecording.textContent = '■ Aufnahme stoppen';
+  soundboardElements.recordingTime.classList.add('hidden');
+  soundRecordingStream?.getTracks().forEach((track) => track.stop());
+  soundRecordingStream = null;
+}
+
+function stopSoundRecording() {
+  if (soundRecorder?.state === 'recording') {
+    clearInterval(soundRecordingTimer);
+    soundRecordingTimer = null;
+    soundboardElements.stopRecording.disabled = true;
+    soundboardElements.stopRecording.textContent = 'Aufnahme wird gespeichert …';
+    soundRecorder.stop();
+    return;
+  }
+  resetRecordingControls();
+}
+
+async function startSoundRecording() {
+  if (!selectedSoundId) return;
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    setSoundboardStatus('Audioaufnahmen werden von diesem Browser nicht unterstützt. Du kannst eine Audiodatei auswählen.', 'error');
+    return;
+  }
+  try {
+    soundRecordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mimeType = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']
+      .find((type) => MediaRecorder.isTypeSupported?.(type));
+    soundRecorder = new MediaRecorder(soundRecordingStream, mimeType ? { mimeType } : undefined);
+    const targetId = selectedSoundId;
+    soundRecordingChunks = [];
+    soundRecorder.ondataavailable = (event) => {
+      if (event.data?.size) soundRecordingChunks.push(event.data);
+    };
+    soundRecorder.onstop = async () => {
+      const type = soundRecorder.mimeType || mimeType || 'audio/webm';
+      const blob = new Blob(soundRecordingChunks, { type });
+      soundRecorder = null;
+      resetRecordingControls();
+      await saveSoundBlob(blob, targetId);
+    };
+    soundRecorder.onerror = () => {
+      soundRecorder = null;
+      resetRecordingControls();
+      setSoundboardStatus('Die Aufnahme wurde unerwartet beendet.', 'error');
+    };
+    soundRecorder.start();
+    soundRecordingStartedAt = Date.now();
+    soundboardElements.startRecording.classList.add('hidden');
+    soundboardElements.stopRecording.classList.remove('hidden');
+    soundboardElements.recordingTime.classList.remove('hidden');
+    soundboardElements.recordingTime.textContent = 'Aufnahme läuft: 0 Sekunden';
+    soundRecordingTimer = setInterval(() => {
+      const seconds = Math.floor((Date.now() - soundRecordingStartedAt) / 1000);
+      soundboardElements.recordingTime.textContent = `Aufnahme läuft: ${seconds} Sekunden`;
+      if (seconds >= 30) stopSoundRecording();
+    }, 500);
+    setSoundboardStatus('Aufnahme läuft. Sprich jetzt ins Mikrofon.', 'warning');
+  } catch {
+    resetRecordingControls();
+    setSoundboardStatus('Mikrofonzugriff wurde nicht erlaubt. Du kannst stattdessen eine Audiodatei auswählen.', 'error');
+  }
+}
+
+renderSoundboard();
+void reloadSoundboard();
+
 function formatGermanDate(isoDate) {
   const [year, month, day] = isoDate.split('-');
   return `${day}.${month}.${year}`;
 }
 
 function showScreen(screen) {
-  for (const item of [deliveryElements.startScreen, deliveryElements.scannerScreen, deliveryElements.deliveryScreen]) {
+  for (const item of [deliveryElements.startScreen, deliveryElements.scannerScreen, deliveryElements.deliveryScreen, deliveryElements.soundboardScreen]) {
     item.classList.toggle('hidden', item !== screen);
   }
   window.scrollTo({ top: 0, behavior: 'instant' });
@@ -743,8 +1000,25 @@ function resetDeliveryPlan(ask = true) {
 
 deliveryElements.openScanner.addEventListener('click', () => showScreen(deliveryElements.scannerScreen));
 deliveryElements.openDelivery.addEventListener('click', () => showScreen(deliveryElements.deliveryScreen));
+soundboardElements.open.addEventListener('click', () => showScreen(deliveryElements.soundboardScreen));
+soundboardElements.grid.addEventListener('click', (event) => {
+  const playButton = event.target.closest('[data-sound-play]');
+  if (playButton) void playSoundSlot(Number(playButton.dataset.soundPlay), playButton);
+  const editButton = event.target.closest('[data-sound-edit]');
+  if (editButton) openSoundEditor(Number(editButton.dataset.soundEdit));
+});
+soundboardElements.closeEditor.addEventListener('click', closeSoundEditor);
+soundboardElements.file.addEventListener('change', handleSoundFile);
+soundboardElements.saveLabel.addEventListener('click', saveSelectedSoundLabel);
+soundboardElements.startRecording.addEventListener('click', startSoundRecording);
+soundboardElements.stopRecording.addEventListener('click', stopSoundRecording);
+soundboardElements.delete.addEventListener('click', deleteSelectedSound);
+soundboardElements.clear.addEventListener('click', clearEntireSoundboard);
 document.querySelectorAll('[data-back-home]').forEach((button) => button.addEventListener('click', () => {
   if (scannerActive) stopScanner();
+  if (soundRecorder?.state === 'recording') stopSoundRecording();
+  stopBoardAudio();
+  closeSoundEditor();
   showScreen(deliveryElements.startScreen);
 }));
 deliveryElements.tabs.addEventListener('click', (event) => {
